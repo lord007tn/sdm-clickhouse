@@ -53,7 +53,7 @@
 
 ## Notes
 
-- Secrets are loaded from OS keychain per connection ID.
+- Secrets are loaded from OS keychain per connection ID, with local file fallback when keychain services are unavailable.
 - Read queries are normalized to ClickHouse JSON format for stable grid rendering.
 - Query history captures success/error status and execution duration.
 - Audit log captures destructive operations (insert/update/delete/DDL/cancel).

@@ -13,6 +13,7 @@ use tauri::Manager;
 #[derive(Clone)]
 pub struct AppState {
     pub db_path: PathBuf,
+    pub secrets_path: PathBuf,
     pub startup_notice: Option<String>,
 }
 
@@ -26,6 +27,7 @@ pub fn run() {
             let data_dir = dirs.data_local_dir().to_path_buf();
             fs::create_dir_all(&data_dir)?;
             let db_path = data_dir.join("simple_sdm.sqlite3");
+            let secrets_path = data_dir.join("secrets_fallback.json");
             let startup_notice = match db::init_database(&db_path) {
                 Ok(_) => None,
                 Err(err) => {
@@ -44,6 +46,7 @@ pub fn run() {
 
             app.manage(AppState {
                 db_path,
+                secrets_path,
                 startup_notice,
             });
             Ok(())

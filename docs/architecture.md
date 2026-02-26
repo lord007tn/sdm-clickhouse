@@ -13,7 +13,7 @@
 2. `React + TypeScript` desktop UI.
 3. `ClickHouse HTTP(S)` transport for all DB interactions.
 4. `SQLite` local metadata store for connections, history, snippets.
-5. `OS keychain` for secrets (passwords are never persisted in SQLite).
+5. `OS keychain` for secrets, with local fallback secret store if platform keyring services are unavailable (passwords are never persisted in SQLite).
 
 ## Backend Design
 

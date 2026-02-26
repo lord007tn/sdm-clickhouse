@@ -169,7 +169,7 @@ const TAB_STORAGE_KEY = "simple-sdm.tabs.v1";
 
 const baseConnection: ConnectionInput = {
   name: "",
-  host: "",
+  host: "localhost",
   port: 8123,
   database: "default",
   username: "default",
@@ -196,6 +196,33 @@ function createTab(index = 1): QueryTab {
     pageSize: 100,
     timeoutMs: 30000,
     running: false,
+  };
+}
+
+function applyConnectionDefaults(input: ConnectionInput): ConnectionInput {
+  return {
+    ...input,
+    host: input.host.trim() || "localhost",
+    port: input.port || 8123,
+    database: input.database.trim() || "default",
+    username: input.username.trim() || "default",
+    timeoutMs: input.timeoutMs || 30000,
+    caCertPath: (input.caCertPath ?? "").trim(),
+    sshTunnel: input.sshTunnel?.enabled
+      ? {
+          enabled: true,
+          host: input.sshTunnel.host ?? "",
+          port: input.sshTunnel.port ?? 22,
+          username: input.sshTunnel.username ?? "",
+          localPort: input.sshTunnel.localPort ?? 8123,
+        }
+      : {
+          enabled: false,
+          host: "",
+          port: 22,
+          username: "",
+          localPort: 8123,
+        },
   };
 }
 
@@ -278,6 +305,8 @@ function App() {
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [connectionDraft, setConnectionDraft] =
     useState<ConnectionInput>(baseConnection);
+  const [showCaCertPath, setShowCaCertPath] = useState(false);
+  const [showSshTunnel, setShowSshTunnel] = useState(false);
   const [savingConnection, setSavingConnection] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [diagnostics, setDiagnostics] = useState<ConnectionDiagnostics | null>(
@@ -898,6 +927,8 @@ function App() {
 
   const openAddDialog = () => {
     setConnectionDraft({ ...baseConnection });
+    setShowCaCertPath(false);
+    setShowSshTunnel(false);
     setDiagnostics(null);
     setConnectionDialogOpen(true);
   };
@@ -923,6 +954,8 @@ function App() {
       timeoutMs: connection.timeoutMs,
       password: "",
     });
+    setShowCaCertPath(Boolean(connection.caCertPath));
+    setShowSshTunnel(Boolean(connection.sshTunnel?.enabled));
     setDiagnostics(null);
     setConnectionDialogOpen(true);
   };
@@ -2417,7 +2450,8 @@ function App() {
               {connectionDraft.id ? "Edit" : "New"} Connection
             </DialogTitle>
             <DialogDescription>
-              Password is stored securely in your OS keychain.
+              Password is stored in your OS keychain when available. On Linux
+              without keyring services, local fallback storage is used.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -2548,19 +2582,6 @@ function App() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
-                  CA Cert Path (optional)
-                </label>
-                <Input
-                  placeholder="C:\\certs\\clickhouse-ca.pem"
-                  value={connectionDraft.caCertPath ?? ""}
-                  onChange={(e) => {
-                    const value = e.currentTarget.value;
-                    setConnectionDraft((v) => ({ ...v, caCertPath: value }));
-                  }}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
                   Timeout (ms)
                 </label>
                 <Input
@@ -2572,68 +2593,139 @@ function App() {
                   }}
                 />
               </div>
-            </div>
-            <div className="rounded-md border border-border/60 p-2">
-              <div className="mb-2 text-[11px] font-medium text-muted-foreground">
-                SSH Tunnel Profile (optional metadata)
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  placeholder="SSH Host"
-                  value={connectionDraft.sshTunnel?.host ?? ""}
-                  onChange={(e) => {
-                    const host = e.currentTarget.value;
-                    setConnectionDraft((v) => ({
-                      ...v,
-                      sshTunnel: { ...(v.sshTunnel ?? {}), enabled: true, host },
-                    }));
-                  }}
-                />
-                <Input
-                  placeholder="SSH Port"
-                  type="number"
-                  value={connectionDraft.sshTunnel?.port ?? 22}
-                  onChange={(e) => {
-                    const port = Number(e.currentTarget.value) || 22;
-                    setConnectionDraft((v) => ({
-                      ...v,
-                      sshTunnel: { ...(v.sshTunnel ?? {}), enabled: true, port },
-                    }));
-                  }}
-                />
-                <Input
-                  placeholder="SSH Username"
-                  value={connectionDraft.sshTunnel?.username ?? ""}
-                  onChange={(e) => {
-                    const username = e.currentTarget.value;
-                    setConnectionDraft((v) => ({
-                      ...v,
-                      sshTunnel: {
-                        ...(v.sshTunnel ?? {}),
-                        enabled: true,
-                        username,
-                      },
-                    }));
-                  }}
-                />
-                <Input
-                  placeholder="Local Port"
-                  type="number"
-                  value={connectionDraft.sshTunnel?.localPort ?? 8123}
-                  onChange={(e) => {
-                    const localPort = Number(e.currentTarget.value) || 8123;
-                    setConnectionDraft((v) => ({
-                      ...v,
-                      sshTunnel: {
-                        ...(v.sshTunnel ?? {}),
-                        enabled: true,
-                        localPort,
-                      },
-                    }));
-                  }}
-                />
+              <div className="flex items-end">
+                <div className="w-full space-y-2 rounded-md border border-border/60 px-3 py-2">
+                  <label className="flex items-center gap-2 text-xs text-foreground/80">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 rounded border-border accent-primary"
+                      checked={showCaCertPath}
+                      onChange={(e) => {
+                        const checked = e.currentTarget.checked;
+                        setShowCaCertPath(checked);
+                        if (!checked) {
+                          setConnectionDraft((v) => ({ ...v, caCertPath: "" }));
+                        }
+                      }}
+                    />
+                    Use custom CA certificate
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-foreground/80">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 rounded border-border accent-primary"
+                      checked={showSshTunnel}
+                      onChange={(e) => {
+                        const checked = e.currentTarget.checked;
+                        setShowSshTunnel(checked);
+                        if (!checked) {
+                          setConnectionDraft((v) => ({
+                            ...v,
+                            sshTunnel: {
+                              enabled: false,
+                              host: "",
+                              port: 22,
+                              username: "",
+                              localPort: 8123,
+                            },
+                          }));
+                        } else {
+                          setConnectionDraft((v) => ({
+                            ...v,
+                            sshTunnel: {
+                              enabled: true,
+                              host: v.sshTunnel?.host ?? "",
+                              port: v.sshTunnel?.port ?? 22,
+                              username: v.sshTunnel?.username ?? "",
+                              localPort: v.sshTunnel?.localPort ?? 8123,
+                            },
+                          }));
+                        }
+                      }}
+                    />
+                    Use SSH tunnel metadata
+                  </label>
+                </div>
               </div>
             </div>
+            {showCaCertPath ? (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">
+                  CA Cert Path
+                </label>
+                <Input
+                  placeholder="/etc/ssl/certs/clickhouse-ca.pem"
+                  value={connectionDraft.caCertPath ?? ""}
+                  onChange={(e) => {
+                    const value = e.currentTarget.value;
+                    setConnectionDraft((v) => ({ ...v, caCertPath: value }));
+                  }}
+                />
+              </div>
+            ) : null}
+            {showSshTunnel ? (
+              <div className="rounded-md border border-border/60 p-2">
+                <div className="mb-2 text-[11px] font-medium text-muted-foreground">
+                  SSH Tunnel Profile (optional metadata)
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    placeholder="SSH Host"
+                    value={connectionDraft.sshTunnel?.host ?? ""}
+                    onChange={(e) => {
+                      const host = e.currentTarget.value;
+                      setConnectionDraft((v) => ({
+                        ...v,
+                        sshTunnel: { ...(v.sshTunnel ?? {}), enabled: true, host },
+                      }));
+                    }}
+                  />
+                  <Input
+                    placeholder="SSH Port"
+                    type="number"
+                    value={connectionDraft.sshTunnel?.port ?? 22}
+                    onChange={(e) => {
+                      const port = Number(e.currentTarget.value) || 22;
+                      setConnectionDraft((v) => ({
+                        ...v,
+                        sshTunnel: { ...(v.sshTunnel ?? {}), enabled: true, port },
+                      }));
+                    }}
+                  />
+                  <Input
+                    placeholder="SSH Username"
+                    value={connectionDraft.sshTunnel?.username ?? ""}
+                    onChange={(e) => {
+                      const username = e.currentTarget.value;
+                      setConnectionDraft((v) => ({
+                        ...v,
+                        sshTunnel: {
+                          ...(v.sshTunnel ?? {}),
+                          enabled: true,
+                          username,
+                        },
+                      }));
+                    }}
+                  />
+                  <Input
+                    placeholder="Local Port"
+                    type="number"
+                    value={connectionDraft.sshTunnel?.localPort ?? 8123}
+                    onChange={(e) => {
+                      const localPort = Number(e.currentTarget.value) || 8123;
+                      setConnectionDraft((v) => ({
+                        ...v,
+                        sshTunnel: {
+                          ...(v.sshTunnel ?? {}),
+                          enabled: true,
+                          localPort,
+                        },
+                      }));
+                    }}
+                  />
+                </div>
+              </div>
+            ) : null}
             {diagnostics ? (
               <div
                 className={cn(
@@ -2663,7 +2755,8 @@ function App() {
               onClick={async () => {
                 setRunningDiagnostics(true);
                 try {
-                  const result = await api.connectionDiagnostics(connectionDraft);
+                  const draft = applyConnectionDefaults(connectionDraft);
+                  const result = await api.connectionDiagnostics(draft);
                   setDiagnostics(result);
                   if (result.ok) {
                     toast.success("Diagnostics passed.");
@@ -2689,8 +2782,9 @@ function App() {
               onClick={async () => {
                 setTestingConnection(true);
                 try {
+                  const draft = applyConnectionDefaults(connectionDraft);
                   toast.success(
-                    (await api.connectionTest(connectionDraft)).message,
+                    (await api.connectionTest(draft)).message,
                   );
                 } catch (error) {
                   toast.error(String(error));
@@ -2708,16 +2802,18 @@ function App() {
               size="sm"
               disabled={!isTauriRuntime || savingConnection}
               onClick={async () => {
+                const draft = applyConnectionDefaults(connectionDraft);
+                const normalizedHost = draft.host.toLowerCase();
+                const normalizedPort = draft.port || 8123;
+                const normalizedDatabase = draft.database.toLowerCase();
+                const normalizedUsername = draft.username.toLowerCase();
                 const isDuplicate = connections.some(
                   (c) =>
-                    c.id !== connectionDraft.id &&
-                    c.host.toLowerCase() ===
-                      connectionDraft.host.trim().toLowerCase() &&
-                    c.port === connectionDraft.port &&
-                    c.database.toLowerCase() ===
-                      connectionDraft.database.trim().toLowerCase() &&
-                    c.username.toLowerCase() ===
-                      connectionDraft.username.trim().toLowerCase(),
+                    c.id !== draft.id &&
+                    c.host.toLowerCase() === normalizedHost &&
+                    c.port === normalizedPort &&
+                    c.database.toLowerCase() === normalizedDatabase &&
+                    c.username.toLowerCase() === normalizedUsername,
                 );
                 if (isDuplicate) {
                   toast.error(
@@ -2727,7 +2823,7 @@ function App() {
                 }
                 setSavingConnection(true);
                 try {
-                  await api.connectionSave(connectionDraft);
+                  await api.connectionSave(draft);
                   setConnectionDialogOpen(false);
                   toast.success("Connection saved.");
                   await loadConnections();

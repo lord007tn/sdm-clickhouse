@@ -1,6 +1,7 @@
 use std::time::Instant;
 use std::{fs, path::PathBuf};
 use std::{path::Path, process::Command};
+use std::collections::HashMap;
 
 use keyring::Entry;
 use serde::Deserialize;
@@ -84,24 +85,77 @@ fn keyring_entry(connection_id: &str) -> anyhow::Result<Entry> {
     Ok(entry)
 }
 
-fn read_secret(connection_id: &str) -> anyhow::Result<String> {
-    let entry = keyring_entry(connection_id)?;
-    let secret = entry
-        .get_password()
-        .map_err(|_| anyhow::anyhow!("missing secret for connection {}", connection_id))?;
-    Ok(secret)
+fn read_fallback_secret(secrets_path: &Path, connection_id: &str) -> anyhow::Result<Option<String>> {
+    if !secrets_path.exists() {
+        return Ok(None);
+    }
+    let raw = fs::read_to_string(secrets_path)?;
+    if raw.trim().is_empty() {
+        return Ok(None);
+    }
+    let secrets: HashMap<String, String> = serde_json::from_str(&raw).unwrap_or_default();
+    Ok(secrets.get(connection_id).cloned())
 }
 
-fn write_secret(connection_id: &str, password: &str) -> anyhow::Result<()> {
-    let entry = keyring_entry(connection_id)?;
-    entry.set_password(password)?;
+fn write_fallback_secret(
+    secrets_path: &Path,
+    connection_id: &str,
+    password: &str,
+) -> anyhow::Result<()> {
+    let mut secrets: HashMap<String, String> = if secrets_path.exists() {
+        let raw = fs::read_to_string(secrets_path)?;
+        serde_json::from_str(&raw).unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
+    secrets.insert(connection_id.to_string(), password.to_string());
+    fs::write(secrets_path, serde_json::to_string_pretty(&secrets)?)?;
     Ok(())
 }
 
-fn delete_secret(connection_id: &str) {
+fn delete_fallback_secret(secrets_path: &Path, connection_id: &str) -> anyhow::Result<()> {
+    if !secrets_path.exists() {
+        return Ok(());
+    }
+    let raw = fs::read_to_string(secrets_path)?;
+    if raw.trim().is_empty() {
+        return Ok(());
+    }
+    let mut secrets: HashMap<String, String> = serde_json::from_str(&raw).unwrap_or_default();
+    if secrets.remove(connection_id).is_some() {
+        fs::write(secrets_path, serde_json::to_string_pretty(&secrets)?)?;
+    }
+    Ok(())
+}
+
+fn read_secret(state: &State<'_, AppState>, connection_id: &str) -> anyhow::Result<String> {
+    if let Ok(entry) = keyring_entry(connection_id) {
+        if let Ok(secret) = entry.get_password() {
+            return Ok(secret);
+        }
+    }
+    if let Ok(Some(secret)) = read_fallback_secret(&state.secrets_path, connection_id) {
+        return Ok(secret);
+    }
+    Err(anyhow::anyhow!("missing secret for connection {}", connection_id))
+}
+
+fn write_secret(state: &State<'_, AppState>, connection_id: &str, password: &str) -> anyhow::Result<()> {
+    if let Ok(entry) = keyring_entry(connection_id) {
+        if entry.set_password(password).is_ok() {
+            let _ = delete_fallback_secret(&state.secrets_path, connection_id);
+            return Ok(());
+        }
+    }
+    write_fallback_secret(&state.secrets_path, connection_id, password)?;
+    Ok(())
+}
+
+fn delete_secret(state: &State<'_, AppState>, connection_id: &str) {
     if let Ok(entry) = keyring_entry(connection_id) {
         let _ = entry.delete_credential();
     }
+    let _ = delete_fallback_secret(&state.secrets_path, connection_id);
 }
 
 fn normalize_connection_endpoint(
@@ -139,12 +193,32 @@ fn normalize_connection_endpoint(
     Ok((host, port, secure))
 }
 
+fn apply_connection_defaults(payload: &ConnectionInput) -> ConnectionInput {
+    let mut normalized = payload.clone();
+    if normalized.host.trim().is_empty() {
+        normalized.host = "localhost".to_string();
+    }
+    if normalized.port == 0 {
+        normalized.port = 8123;
+    }
+    if normalized.database.trim().is_empty() {
+        normalized.database = "default".to_string();
+    }
+    if normalized.username.trim().is_empty() {
+        normalized.username = "default".to_string();
+    }
+    if normalized.timeout_ms.unwrap_or(0) == 0 {
+        normalized.timeout_ms = Some(30_000);
+    }
+    normalized
+}
+
 fn get_connection_with_secret(
     state: &State<'_, AppState>,
     connection_id: &str,
 ) -> anyhow::Result<(ConnectionProfile, String)> {
     let profile = db::get_connection(&state.db_path, connection_id)?;
-    let password = read_secret(connection_id)?;
+    let password = read_secret(state, connection_id)?;
     Ok((profile, password))
 }
 
@@ -266,7 +340,7 @@ pub fn connection_delete(
     db::delete_connection(&state.db_path, &connection_id)
         .map_err(into_message)
         .map(|_| {
-            delete_secret(&connection_id);
+            delete_secret(&state, &connection_id);
             CommandMessage {
                 message: "Connection deleted.".to_string(),
             }
@@ -278,12 +352,9 @@ pub fn connection_save(
     state: State<'_, AppState>,
     payload: ConnectionInput,
 ) -> Result<ConnectionProfile, String> {
-    if payload.name.trim().is_empty()
-        || payload.host.trim().is_empty()
-        || payload.database.trim().is_empty()
-        || payload.username.trim().is_empty()
-    {
-        return Err("Name, host, database and username are required.".to_string());
+    let payload = apply_connection_defaults(&payload);
+    if payload.name.trim().is_empty() {
+        return Err("Name is required.".to_string());
     }
     let password = payload.password.clone().unwrap_or_default();
     let has_password = !password.trim().is_empty();
@@ -301,7 +372,7 @@ pub fn connection_save(
 
     let profile = db::upsert_connection(&state.db_path, &normalized).map_err(into_message)?;
     if has_password {
-        write_secret(&profile.id, &password).map_err(into_message)?;
+        write_secret(&state, &profile.id, &password).map_err(into_message)?;
     }
     Ok(profile)
 }
@@ -311,12 +382,7 @@ pub async fn connection_test(
     state: State<'_, AppState>,
     payload: ConnectionInput,
 ) -> Result<CommandMessage, String> {
-    if payload.host.trim().is_empty()
-        || payload.database.trim().is_empty()
-        || payload.username.trim().is_empty()
-    {
-        return Err("Host, database and username are required to test a connection.".to_string());
-    }
+    let payload = apply_connection_defaults(&payload);
     let (host, port, secure) =
         normalize_connection_endpoint(&payload.host, payload.port, payload.secure)
             .map_err(into_message)?;
@@ -344,7 +410,7 @@ pub async fn connection_test(
     let password = if let Some(candidate) = payload.password {
         if candidate.trim().is_empty() {
             if let Some(id) = payload.id {
-                read_secret(&id).map_err(into_message)?
+                read_secret(&state, &id).map_err(into_message)?
             } else {
                 return Err("Password is required.".to_string());
             }
@@ -352,7 +418,7 @@ pub async fn connection_test(
             candidate
         }
     } else if let Some(id) = payload.id {
-        read_secret(&id).map_err(into_message)?
+        read_secret(&state, &id).map_err(into_message)?
     } else {
         return Err("Password is required.".to_string());
     };
@@ -995,12 +1061,7 @@ pub async fn connection_diagnostics(
     state: State<'_, AppState>,
     payload: ConnectionInput,
 ) -> Result<ConnectionDiagnostics, String> {
-    if payload.host.trim().is_empty()
-        || payload.database.trim().is_empty()
-        || payload.username.trim().is_empty()
-    {
-        return Err("Host, database and username are required.".to_string());
-    }
+    let payload = apply_connection_defaults(&payload);
     let (host, port, secure) =
         normalize_connection_endpoint(&payload.host, payload.port, payload.secure)
             .map_err(into_message)?;
@@ -1023,7 +1084,7 @@ pub async fn connection_diagnostics(
     let password = if let Some(candidate) = payload.password {
         if candidate.trim().is_empty() {
             if let Some(id) = payload.id {
-                read_secret(&id).map_err(into_message)?
+                read_secret(&state, &id).map_err(into_message)?
             } else {
                 return Err("Password is required.".to_string());
             }
@@ -1031,7 +1092,7 @@ pub async fn connection_diagnostics(
             candidate
         }
     } else if let Some(id) = payload.id {
-        read_secret(&id).map_err(into_message)?
+        read_secret(&state, &id).map_err(into_message)?
     } else {
         return Err("Password is required.".to_string());
     };
