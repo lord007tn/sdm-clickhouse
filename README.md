@@ -65,6 +65,7 @@ cargo check --manifest-path src-tauri/Cargo.toml
 
 ## Documentation
 
+- [Changelog](./CHANGELOG.md)
 - [Architecture](./docs/architecture.md)
 - [Tauri Commands](./docs/commands.md)
 - [Release Notes](./docs/release.md)
