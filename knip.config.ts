@@ -7,6 +7,7 @@ const config = {
     "src-tauri/tauri.conf.json",
   ],
   ignore: [],
+  ignoreDependencies: ["@playwright/test"],
   ignoreExportsUsedInFile: true,
   ignoreIssues: {
     "src/components/ui/**": ["exports"],
@@ -14,4 +15,3 @@ const config = {
 };
 
 export default config;
-
