@@ -233,6 +233,10 @@ struct GithubReleaseAsset {
 struct GithubRelease {
     tag_name: String,
     assets: Vec<GithubReleaseAsset>,
+    #[serde(default)]
+    draft: bool,
+    #[serde(default)]
+    prerelease: bool,
 }
 
 fn parse_semver(raw: &str) -> Vec<u32> {
@@ -274,11 +278,68 @@ fn runtime_target() -> (&'static str, &'static str, String) {
     (os, arch, format!("{os}/{arch}"))
 }
 
+fn normalize_repo_string(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.split('/').count() == 2 && !trimmed.contains("://") {
+        return Some(trimmed.to_string());
+    }
+    if let Ok(parsed) = reqwest::Url::parse(trimmed) {
+        let host = parsed.host_str().unwrap_or_default().to_ascii_lowercase();
+        if host != "github.com" {
+            return None;
+        }
+        let mut segments = parsed
+            .path_segments()
+            .into_iter()
+            .flatten()
+            .filter(|segment| !segment.is_empty());
+        if let (Some(owner), Some(repo)) = (segments.next(), segments.next()) {
+            return Some(format!("{owner}/{repo}"));
+        }
+    }
+    None
+}
+
+fn resolve_updater_repo() -> String {
+    if let Ok(raw) = std::env::var("SIMPLE_SDM_UPDATER_REPO") {
+        if let Some(normalized) = normalize_repo_string(&raw) {
+            return normalized;
+        }
+    }
+    if let Some(normalized) = normalize_repo_string(env!("CARGO_PKG_REPOSITORY")) {
+        return normalized;
+    }
+    "lord007tn/simple-sdm".to_string()
+}
+
 fn release_sha256(asset: &GithubReleaseAsset) -> Option<String> {
     let digest = asset.digest.as_deref()?.trim().to_ascii_lowercase();
     digest
         .strip_prefix("sha256:")
         .map(|value| value.to_string())
+}
+
+fn select_release_for_target<'a>(
+    releases: &'a [GithubRelease],
+    current_version: &str,
+    os: &str,
+    arch: &str,
+) -> Option<(&'a GithubRelease, &'a GithubReleaseAsset, String, String)> {
+    releases.iter().find_map(|release| {
+        if release.draft || release.prerelease {
+            return None;
+        }
+        let latest_version = release.tag_name.trim_start_matches('v').to_string();
+        if latest_version.is_empty() || !is_newer_version(&latest_version, current_version) {
+            return None;
+        }
+        let asset = select_asset_for_target(&release.assets, os, arch)?;
+        let sha256 = release_sha256(asset)?;
+        Some((release, asset, latest_version, sha256))
+    })
 }
 
 fn select_asset_for_target<'a>(
@@ -1256,9 +1317,8 @@ pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheck
         });
     }
 
-    let repo = std::env::var("SIMPLE_SDM_UPDATER_REPO")
-        .unwrap_or_else(|_| "lord007tn/simple-sdm".to_string());
-    let endpoint = format!("https://api.github.com/repos/{repo}/releases/latest");
+    let repo = resolve_updater_repo();
+    let endpoint = format!("https://api.github.com/repos/{repo}/releases?per_page=20");
     let mut request = reqwest::Client::new()
         .get(endpoint)
         .header("Accept", "application/vnd.github+json")
@@ -1271,7 +1331,32 @@ pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheck
     }
 
     let response = request.send().await.map_err(|err| err.to_string())?;
-    if !response.status().is_success() {
+    let status = response.status();
+    if !status.is_success() {
+        let guidance = if status.as_u16() == 404 {
+            format!(
+                "Repository '{}' was not found. Set SIMPLE_SDM_UPDATER_REPO to a valid owner/repo and provide GITHUB_TOKEN for private repositories.",
+                repo
+            )
+        } else if status.as_u16() == 401 || status.as_u16() == 403 {
+            "Authentication failed for GitHub API. Check GITHUB_TOKEN or GH_TOKEN permissions."
+                .to_string()
+        } else {
+            "Could not read release metadata from GitHub.".to_string()
+        };
+        return Err(format!(
+            "GitHub updater request failed with HTTP {}. {}",
+            status.as_u16(),
+            guidance
+        ));
+    }
+    let releases = response
+        .json::<Vec<GithubRelease>>()
+        .await
+        .map_err(|err| err.to_string())?;
+    let Some((_release, asset, latest_version, sha256)) =
+        select_release_for_target(&releases, &current_version, os, arch)
+    else {
         return Ok(UpdateCheckResult {
             available: false,
             current_version,
@@ -1281,44 +1366,15 @@ pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheck
             sha256: None,
             target,
         });
-    }
-    let release = response
-        .json::<GithubRelease>()
-        .await
-        .map_err(|err| err.to_string())?;
-    let latest_version = release.tag_name.trim_start_matches('v').to_string();
-    if latest_version.is_empty() || !is_newer_version(&latest_version, &current_version) {
-        return Ok(UpdateCheckResult {
-            available: false,
-            current_version,
-            latest_version: Some(latest_version),
-            asset_name: None,
-            download_url: None,
-            sha256: None,
-            target,
-        });
-    }
-
-    let Some(asset) = select_asset_for_target(&release.assets, os, arch) else {
-        return Ok(UpdateCheckResult {
-            available: false,
-            current_version,
-            latest_version: Some(latest_version),
-            asset_name: None,
-            download_url: None,
-            sha256: None,
-            target,
-        });
     };
-    let sha256 = release_sha256(asset);
 
     Ok(UpdateCheckResult {
-        available: sha256.is_some(),
+        available: true,
         current_version,
         latest_version: Some(latest_version),
         asset_name: Some(asset.name.clone()),
         download_url: Some(asset.browser_download_url.clone()),
-        sha256,
+        sha256: Some(sha256),
         target,
     })
 }
@@ -1419,11 +1475,20 @@ pub async fn app_install_update(
     if expected_hash.len() != 64 || !expected_hash.chars().all(|ch| ch.is_ascii_hexdigit()) {
         return Err("SHA256 hash is invalid.".to_string());
     }
-    if !download_url.starts_with("https://") {
+    let parsed_url = reqwest::Url::parse(download_url.trim())
+        .map_err(|_| "Download URL is invalid.".to_string())?;
+    if parsed_url.scheme() != "https" {
         return Err("Download URL must use HTTPS.".to_string());
     }
-    if !download_url.contains("github.com/") {
-        return Err("Only GitHub-hosted releases are allowed.".to_string());
+    let host = parsed_url
+        .host_str()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if host != "github.com" {
+        return Err("Only GitHub-hosted release download URLs are allowed.".to_string());
+    }
+    if !parsed_url.path().contains("/releases/download/") {
+        return Err("Download URL must target GitHub release assets.".to_string());
     }
 
     let response = reqwest::Client::new()

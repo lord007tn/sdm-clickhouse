@@ -73,6 +73,7 @@ Default behavior is user-space install without sudo/admin when possible:
 Use `--system` (or `-SystemInstall` in PowerShell) only when you want system-wide install paths.
 
 If the repository is private, set `GITHUB_TOKEN` (or `GH_TOKEN`) before running installer commands.
+For in-app update checks against a fork/private release source, set `SIMPLE_SDM_UPDATER_REPO` (format: `owner/repo`).
 
 ## Run (Desktop Dev)
 
@@ -91,6 +92,8 @@ pnpm tauri build --debug
 
 ```powershell
 pnpm typecheck
+pnpm lint
+pnpm format:check
 pnpm knip
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
@@ -100,9 +103,11 @@ cargo check --manifest-path src-tauri/Cargo.toml
 - Issue templates and PR template are under `.github/`.
 - Label catalog and sync are managed by `.github/labels.yml` + `.github/workflows/label-sync.yml`.
 - Release pipeline (`.github/workflows/release.yml`) runs on `v*` tags:
+
 1. Generate release notes with `npx changelogithub@latest`
-2. Build desktop bundles on Linux/Windows/macOS
-3. Upload artifacts to the GitHub release
+2. Build and publish desktop bundles on Linux/Windows/macOS via `tauri-action`
+3. Publish updater manifest `latest.json` to release assets
+
 - In-app updater flow checks for updates and uses OS/arch-specific release assets with SHA256 verification before installer launch.
 - Built-in updater path requests app restart automatically after successful install.
 

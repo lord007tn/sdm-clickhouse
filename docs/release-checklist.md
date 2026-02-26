@@ -7,8 +7,8 @@
 3. `pnpm build`
 4. `pnpm knip`
 5. `cargo check` (in `src-tauri`)
-5. Smoke test: connection create/test/query/cancel
-6. Verify audit/logs tabs capture expected operations
+6. Smoke test: connection create/test/query/cancel
+7. Verify audit/logs tabs capture expected operations
 
 ## 2. Repository Automation Setup
 

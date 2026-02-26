@@ -131,11 +131,9 @@ export const api = {
       overwriteExisting,
     }),
 
-  auditList: (limit = 200) =>
-    tauriInvoke<AuditItem[]>("audit_list", { limit }),
+  auditList: (limit = 200) => tauriInvoke<AuditItem[]>("audit_list", { limit }),
 
-  logsList: (limit = 300) =>
-    tauriInvoke<AppLogItem[]>("logs_list", { limit }),
+  logsList: (limit = 300) => tauriInvoke<AppLogItem[]>("logs_list", { limit }),
 
   appBackupMetadata: (targetPath: string) =>
     tauriInvoke<CommandMessage>("app_backup_metadata", { targetPath }),
@@ -143,14 +141,11 @@ export const api = {
   appRestoreMetadata: (sourcePath: string) =>
     tauriInvoke<CommandMessage>("app_restore_metadata", { sourcePath }),
 
-  appStartupStatus: () =>
-    tauriInvoke<string | null>("app_startup_status"),
+  appStartupStatus: () => tauriInvoke<string | null>("app_startup_status"),
 
-  appRequestRestart: () =>
-    tauriInvoke<CommandMessage>("app_request_restart"),
+  appRequestRestart: () => tauriInvoke<CommandMessage>("app_request_restart"),
 
-  appCheckUpdate: () =>
-    tauriInvoke<UpdateCheckResult>("app_check_update"),
+  appCheckUpdate: () => tauriInvoke<UpdateCheckResult>("app_check_update"),
 
   appInstallUpdate: (downloadUrl: string, sha256: string, assetName: string) =>
     tauriInvoke<CommandMessage>("app_install_update", {

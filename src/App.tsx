@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { check } from "@tauri-apps/plugin-updater";
+import { confirm, open, save } from "@tauri-apps/plugin-dialog";
 import {
   Check,
   ChevronDown,
@@ -24,7 +25,6 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format as formatSql } from "sql-formatter";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type {
@@ -382,7 +382,10 @@ function App() {
   const resultRows = activeTab?.result?.rows ?? [];
   const rowHeightPx = 30;
   const shouldVirtualize = resultRows.length > 300;
-  const visibleWindow = Math.max(1, Math.ceil(resultViewportHeight / rowHeightPx));
+  const visibleWindow = Math.max(
+    1,
+    Math.ceil(resultViewportHeight / rowHeightPx),
+  );
   const overscan = 10;
   const virtualStart = shouldVirtualize
     ? Math.max(0, Math.floor(resultScrollTop / rowHeightPx) - overscan)
@@ -412,15 +415,13 @@ function App() {
     try {
       const [dbRows, historyRows, snippetRows, auditRows, logRows] =
         await Promise.all([
-        api.schemaListDatabases(activeConnectionId),
-        api.historyList(activeConnectionId, 50),
-        api.snippetList(activeConnectionId),
-        api.auditList(150),
-        api.logsList(200),
-      ]);
-      setDatabases(
-        dbRows.map((row) => String(row.name ?? "")).filter(Boolean),
-      );
+          api.schemaListDatabases(activeConnectionId),
+          api.historyList(activeConnectionId, 50),
+          api.snippetList(activeConnectionId),
+          api.auditList(150),
+          api.logsList(200),
+        ]);
+      setDatabases(dbRows.map((row) => String(row.name ?? "")).filter(Boolean));
       setHistorySql(historyRows.map((item) => item.sql));
       setSnippets(
         snippetRows.map((item) => ({
@@ -628,7 +629,10 @@ function App() {
   const cancelQuery = async () => {
     if (!activeConnectionId || !activeTab?.runningQueryId) return;
     try {
-      const msg = await api.queryCancel(activeConnectionId, activeTab.runningQueryId);
+      const msg = await api.queryCancel(
+        activeConnectionId,
+        activeTab.runningQueryId,
+      );
       toast.success(msg.message);
     } catch (error) {
       toast.error(String(error));
@@ -637,9 +641,10 @@ function App() {
     }
   };
 
-  const formatCurrentSql = () => {
+  const formatCurrentSql = async () => {
     if (!activeTab) return;
     try {
+      const { format: formatSql } = await import("sql-formatter");
       const formatted = formatSql(activeTab.sql, { language: "sql" });
       updateTab(activeTab.id, { sql: formatted });
     } catch (error) {
@@ -688,10 +693,11 @@ function App() {
   };
 
   const exportProfiles = async () => {
-    const targetPath = window.prompt(
-      "Export profiles to file path",
-      "C:\\\\temp\\\\simple-sdm-connections.json",
-    );
+    const targetPath = await save({
+      title: "Export Connection Profiles",
+      defaultPath: "simple-sdm-connections.json",
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
     if (!targetPath) return;
     try {
       const out = await api.connectionExportProfiles(targetPath);
@@ -702,16 +708,24 @@ function App() {
   };
 
   const importProfiles = async () => {
-    const sourcePath = window.prompt(
-      "Import profiles from file path",
-      "C:\\\\temp\\\\simple-sdm-connections.json",
-    );
+    const sourcePath = await open({
+      title: "Import Connection Profiles",
+      multiple: false,
+      directory: false,
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
     if (!sourcePath) return;
-    const overwrite = window.confirm(
+    const selectedPath = Array.isArray(sourcePath) ? sourcePath[0] : sourcePath;
+    if (!selectedPath) return;
+    const overwrite = await confirm(
       "Overwrite existing profiles with matching IDs?",
+      {
+        title: "Import Profiles",
+        kind: "warning",
+      },
     );
     try {
-      const out = await api.connectionImportProfiles(sourcePath, overwrite);
+      const out = await api.connectionImportProfiles(selectedPath, overwrite);
       toast.success(out.message);
       await loadConnections();
     } catch (error) {
@@ -720,10 +734,11 @@ function App() {
   };
 
   const backupMetadata = async () => {
-    const targetPath = window.prompt(
-      "Backup metadata SQLite to file path",
-      "C:\\\\temp\\\\simple-sdm-backup.sqlite3",
-    );
+    const targetPath = await save({
+      title: "Backup Metadata Database",
+      defaultPath: "simple-sdm-backup.sqlite3",
+      filters: [{ name: "SQLite", extensions: ["sqlite3", "db"] }],
+    });
     if (!targetPath) return;
     try {
       const out = await api.appBackupMetadata(targetPath);
@@ -734,20 +749,27 @@ function App() {
   };
 
   const restoreMetadata = async () => {
-    const sourcePath = window.prompt(
-      "Restore metadata SQLite from file path",
-      "C:\\\\temp\\\\simple-sdm-backup.sqlite3",
-    );
+    const sourcePath = await open({
+      title: "Restore Metadata Database",
+      multiple: false,
+      directory: false,
+      filters: [{ name: "SQLite", extensions: ["sqlite3", "db"] }],
+    });
     if (!sourcePath) return;
-    if (
-      !window.confirm(
-        "Restore will replace current local metadata. Continue?",
-      )
-    ) {
+    const selectedPath = Array.isArray(sourcePath) ? sourcePath[0] : sourcePath;
+    if (!selectedPath) return;
+    const proceed = await confirm(
+      "Restore will replace current local metadata. Continue?",
+      {
+        title: "Restore Metadata",
+        kind: "warning",
+      },
+    );
+    if (!proceed) {
       return;
     }
     try {
-      const out = await api.appRestoreMetadata(sourcePath);
+      const out = await api.appRestoreMetadata(selectedPath);
       toast.success(out.message);
       await loadConnections();
       if (activeConnectionId) {
@@ -1119,25 +1141,26 @@ function App() {
   };
 
   /* ── Updater ── */
-  const checkGithubReleaseUpdate = async (): Promise<GithubUpdateInfo | null> => {
-    const result = await api.appCheckUpdate();
-    if (
-      !result.available ||
-      !result.latestVersion ||
-      !result.assetName ||
-      !result.downloadUrl ||
-      !result.sha256
-    ) {
-      return null;
-    }
-    return {
-      version: result.latestVersion,
-      assetName: result.assetName,
-      downloadUrl: result.downloadUrl,
-      sha256: result.sha256,
-      targetLabel: result.target,
+  const checkGithubReleaseUpdate =
+    async (): Promise<GithubUpdateInfo | null> => {
+      const result = await api.appCheckUpdate();
+      if (
+        !result.available ||
+        !result.latestVersion ||
+        !result.assetName ||
+        !result.downloadUrl ||
+        !result.sha256
+      ) {
+        return null;
+      }
+      return {
+        version: result.latestVersion,
+        assetName: result.assetName,
+        downloadUrl: result.downloadUrl,
+        sha256: result.sha256,
+        targetLabel: result.target,
+      };
     };
-  };
 
   const checkForUpdates = async () => {
     if (!isTauriRuntime) {
@@ -1256,9 +1279,11 @@ function App() {
       let downloaded = 0;
       await update.downloadAndInstall((event) => {
         if (event.event === "Started") {
-          totalSize = (event.data as { contentLength?: number }).contentLength ?? 0;
+          totalSize =
+            (event.data as { contentLength?: number }).contentLength ?? 0;
         } else if (event.event === "Progress") {
-          downloaded += (event.data as { chunkLength?: number }).chunkLength ?? 0;
+          downloaded +=
+            (event.data as { chunkLength?: number }).chunkLength ?? 0;
           const pct =
             totalSize > 0 ? Math.round((downloaded / totalSize) * 100) : 0;
           setUpdater((s) => ({ ...s, progress: pct }));
@@ -1314,6 +1339,7 @@ function App() {
             className="h-7 w-7"
             onClick={openAddDialog}
             title="Add Connection"
+            aria-label="Add Connection"
           >
             <Plus className="h-4 w-4" />
           </Button>
@@ -1323,8 +1349,7 @@ function App() {
         <div
           className="flex flex-col overflow-hidden"
           style={{
-            flex:
-              activeConnectionId && databases.length > 0 ? "0 0 auto" : "1",
+            flex: activeConnectionId && databases.length > 0 ? "0 0 auto" : "1",
             maxHeight:
               activeConnectionId && databases.length > 0 ? "45%" : undefined,
           }}
@@ -1362,6 +1387,8 @@ function App() {
                 connections.map((connection) => (
                   <div
                     key={connection.id}
+                    role="button"
+                    tabIndex={0}
                     className={cn(
                       "group flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors",
                       activeConnectionId === connection.id
@@ -1369,6 +1396,12 @@ function App() {
                         : "hover:bg-muted/50",
                     )}
                     onClick={() => setActiveConnectionId(connection.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setActiveConnectionId(connection.id);
+                      }
+                    }}
                   >
                     <div
                       className={cn(
@@ -1410,6 +1443,7 @@ function App() {
                           openEditDialog(connection);
                         }}
                         title="Edit"
+                        aria-label={`Edit connection ${connection.name}`}
                       >
                         <Pencil className="h-3 w-3 text-muted-foreground" />
                       </button>
@@ -1420,6 +1454,7 @@ function App() {
                           void deleteConnection(connection.id);
                         }}
                         title="Delete"
+                        aria-label={`Delete connection ${connection.name}`}
                       >
                         <Trash2 className="h-3 w-3 text-muted-foreground" />
                       </button>
@@ -1442,6 +1477,7 @@ function App() {
                 className="rounded-md p-1 hover:bg-muted/60"
                 onClick={() => void loadWorkspace()}
                 title="Refresh"
+                aria-label="Refresh workspace"
               >
                 <RefreshCw
                   className={cn(
@@ -1501,28 +1537,28 @@ function App() {
                                   .includes(normalizedSchemaFilter);
                               })
                               .map((table) => (
-                              <button
-                                key={`${table.database}.${table.name}`}
-                                className="flex w-full items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                                onClick={() =>
-                                  void (async () => {
-                                    await selectTable(table);
-                                    if (!activeTab) return;
-                                    updateTab(activeTab.id, {
-                                      sql: `SELECT * FROM \`${table.database}\`.\`${table.name}\``,
-                                      page: 1,
-                                    });
-                                  })()
-                                }
-                                title={`${table.name} (${table.engine})`}
-                              >
-                                <Table2 className="h-3 w-3 flex-shrink-0" />
-                                <span className="truncate">{table.name}</span>
-                                <span className="ml-auto flex-shrink-0 text-[9px] text-muted-foreground/40">
-                                  {table.engine}
-                                </span>
-                              </button>
-                            ))
+                                <button
+                                  key={`${table.database}.${table.name}`}
+                                  className="flex w-full items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                  onClick={() =>
+                                    void (async () => {
+                                      await selectTable(table);
+                                      if (!activeTab) return;
+                                      updateTab(activeTab.id, {
+                                        sql: `SELECT * FROM \`${table.database}\`.\`${table.name}\``,
+                                        page: 1,
+                                      });
+                                    })()
+                                  }
+                                  title={`${table.name} (${table.engine})`}
+                                >
+                                  <Table2 className="h-3 w-3 flex-shrink-0" />
+                                  <span className="truncate">{table.name}</span>
+                                  <span className="ml-auto flex-shrink-0 text-[9px] text-muted-foreground/40">
+                                    {table.engine}
+                                  </span>
+                                </button>
+                              ))
                           )}
                         </div>
                       )}
@@ -1628,14 +1664,14 @@ function App() {
               <button
                 className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/10"
                 onClick={() => void downloadUpdate()}
+                aria-label={`Install update version ${updater.version}`}
                 title={
                   updater.source === "github"
                     ? `Install ${updater.assetName ?? "release asset"} (${updater.targetLabel ?? "runtime"})`
                     : "Download and install update"
                 }
               >
-                <Download className="h-3 w-3" />
-                v{updater.version}
+                <Download className="h-3 w-3" />v{updater.version}
               </button>
             ) : (
               <button
@@ -1643,6 +1679,7 @@ function App() {
                 onClick={() => void checkForUpdates()}
                 disabled={updater.checking}
                 title="Check for updates"
+                aria-label="Check for updates"
               >
                 {updater.checking ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -1906,10 +1943,7 @@ function App() {
                             const filtered = prev.filter(
                               (t) => t.id !== tab.id,
                             );
-                            if (
-                              tab.id === activeTabId &&
-                              filtered.length > 0
-                            ) {
+                            if (tab.id === activeTabId && filtered.length > 0) {
                               setActiveTabId(filtered[0].id);
                             }
                             return filtered;
@@ -1944,7 +1978,8 @@ function App() {
                   value={activeTab?.sql ?? ""}
                   onChange={(e) => {
                     const value = e.currentTarget.value;
-                    activeTab && updateTab(activeTab.id, { sql: value });
+                    if (!activeTab) return;
+                    updateTab(activeTab.id, { sql: value });
                   }}
                   placeholder="Write your SQL query here..."
                 />
@@ -1957,7 +1992,8 @@ function App() {
                     value={activeTab?.timeoutMs ?? 30000}
                     onChange={(e) => {
                       const value = Number(e.currentTarget.value) || 30000;
-                      activeTab && updateTab(activeTab.id, { timeoutMs: value });
+                      if (!activeTab) return;
+                      updateTab(activeTab.id, { timeoutMs: value });
                     }}
                   />
                   <button
@@ -1992,8 +2028,7 @@ function App() {
               </div>
 
               {/* Pending changes bar */}
-              {(hasPendingChanges ||
-                selectedRowIdx !== null) && (
+              {(hasPendingChanges || selectedRowIdx !== null) && (
                 <div className="flex items-center gap-2 border-b border-border/40 bg-card/80 px-3 py-1.5">
                   {/* Left: selection info */}
                   {selectedRowIdx !== null &&
@@ -2007,8 +2042,7 @@ function App() {
                           size="sm"
                           className="h-6 gap-1 px-2 text-[11px]"
                           onClick={() => {
-                            const row =
-                              activeTab.result!.rows[selectedRowIdx];
+                            const row = activeTab.result!.rows[selectedRowIdx];
                             navigator.clipboard.writeText(
                               JSON.stringify(row, null, 2),
                             );
@@ -2247,9 +2281,7 @@ function App() {
                                         // Edit the pending value if it exists
                                         const editValue =
                                           pendingEdit !== undefined
-                                            ? String(
-                                                pendingEdit.newValue ?? "",
-                                              )
+                                            ? String(pendingEdit.newValue ?? "")
                                             : displayValue;
                                         setEditingCell({
                                           rowIdx: idx,
@@ -2277,7 +2309,10 @@ function App() {
                         <TableRow>
                           <TableCell
                             colSpan={activeTab.result.columns.length}
-                            style={{ height: (resultRows.length - virtualEnd) * rowHeightPx }}
+                            style={{
+                              height:
+                                (resultRows.length - virtualEnd) * rowHeightPx,
+                            }}
                           />
                         </TableRow>
                       ) : null}
@@ -2343,8 +2378,7 @@ function App() {
                               key={`${idx}-${sql}`}
                               className="mono mb-0.5 block w-full truncate rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                               onClick={() =>
-                                activeTab &&
-                                updateTab(activeTab.id, { sql })
+                                activeTab && updateTab(activeTab.id, { sql })
                               }
                               title={sql}
                             >
@@ -2484,10 +2518,14 @@ function App() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
+              <label
+                htmlFor="connection-name"
+                className="text-xs font-medium text-muted-foreground"
+              >
                 Name
               </label>
               <Input
+                id="connection-name"
                 placeholder="My ClickHouse Server"
                 value={connectionDraft.name}
                 onChange={(e) => {
@@ -2498,10 +2536,14 @@ function App() {
             </div>
             <div className="grid grid-cols-[1fr_100px] gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
+                <label
+                  htmlFor="connection-host"
+                  className="text-xs font-medium text-muted-foreground"
+                >
                   Host
                 </label>
                 <Input
+                  id="connection-host"
                   placeholder="localhost"
                   value={connectionDraft.host}
                   onChange={(e) => {
@@ -2511,10 +2553,14 @@ function App() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
+                <label
+                  htmlFor="connection-port"
+                  className="text-xs font-medium text-muted-foreground"
+                >
                   Port
                 </label>
                 <Input
+                  id="connection-port"
                   type="number"
                   value={connectionDraft.port}
                   onChange={(e) => {
@@ -2525,10 +2571,14 @@ function App() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
+              <label
+                htmlFor="connection-database"
+                className="text-xs font-medium text-muted-foreground"
+              >
                 Database
               </label>
               <Input
+                id="connection-database"
                 placeholder="default"
                 value={connectionDraft.database}
                 onChange={(e) => {
@@ -2539,10 +2589,14 @@ function App() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
+                <label
+                  htmlFor="connection-username"
+                  className="text-xs font-medium text-muted-foreground"
+                >
                   Username
                 </label>
                 <Input
+                  id="connection-username"
                   placeholder="default"
                   value={connectionDraft.username}
                   onChange={(e) => {
@@ -2552,10 +2606,14 @@ function App() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
+                <label
+                  htmlFor="connection-password"
+                  className="text-xs font-medium text-muted-foreground"
+                >
                   Password
                 </label>
                 <Input
+                  id="connection-password"
                   type="password"
                   placeholder="••••••"
                   value={connectionDraft.password ?? ""}
@@ -2609,10 +2667,14 @@ function App() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
+                <label
+                  htmlFor="connection-timeout"
+                  className="text-xs font-medium text-muted-foreground"
+                >
                   Timeout (ms)
                 </label>
                 <Input
+                  id="connection-timeout"
                   type="number"
                   value={connectionDraft.timeoutMs ?? 30000}
                   onChange={(e) => {
@@ -2623,8 +2685,12 @@ function App() {
               </div>
               <div className="flex items-end">
                 <div className="w-full space-y-2 rounded-md border border-border/60 px-3 py-2">
-                  <label className="flex items-center gap-2 text-xs text-foreground/80">
+                  <label
+                    htmlFor="connection-show-ca-cert"
+                    className="flex items-center gap-2 text-xs text-foreground/80"
+                  >
                     <input
+                      id="connection-show-ca-cert"
                       type="checkbox"
                       className="h-3.5 w-3.5 rounded border-border accent-primary"
                       checked={showCaCertPath}
@@ -2638,8 +2704,12 @@ function App() {
                     />
                     Use custom CA certificate
                   </label>
-                  <label className="flex items-center gap-2 text-xs text-foreground/80">
+                  <label
+                    htmlFor="connection-show-ssh-tunnel"
+                    className="flex items-center gap-2 text-xs text-foreground/80"
+                  >
                     <input
+                      id="connection-show-ssh-tunnel"
                       type="checkbox"
                       className="h-3.5 w-3.5 rounded border-border accent-primary"
                       checked={showSshTunnel}
@@ -2678,10 +2748,14 @@ function App() {
             </div>
             {showCaCertPath ? (
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
+                <label
+                  htmlFor="connection-ca-cert-path"
+                  className="text-xs font-medium text-muted-foreground"
+                >
                   CA Cert Path
                 </label>
                 <Input
+                  id="connection-ca-cert-path"
                   placeholder="/etc/ssl/certs/clickhouse-ca.pem"
                   value={connectionDraft.caCertPath ?? ""}
                   onChange={(e) => {
@@ -2704,7 +2778,11 @@ function App() {
                       const host = e.currentTarget.value;
                       setConnectionDraft((v) => ({
                         ...v,
-                        sshTunnel: { ...(v.sshTunnel ?? {}), enabled: true, host },
+                        sshTunnel: {
+                          ...(v.sshTunnel ?? {}),
+                          enabled: true,
+                          host,
+                        },
                       }));
                     }}
                   />
@@ -2716,7 +2794,11 @@ function App() {
                       const port = Number(e.currentTarget.value) || 22;
                       setConnectionDraft((v) => ({
                         ...v,
-                        sshTunnel: { ...(v.sshTunnel ?? {}), enabled: true, port },
+                        sshTunnel: {
+                          ...(v.sshTunnel ?? {}),
+                          enabled: true,
+                          port,
+                        },
                       }));
                     }}
                   />
@@ -2811,9 +2893,7 @@ function App() {
                 setTestingConnection(true);
                 try {
                   const draft = applyConnectionDefaults(connectionDraft);
-                  toast.success(
-                    (await api.connectionTest(draft)).message,
-                  );
+                  toast.success((await api.connectionTest(draft)).message);
                 } catch (error) {
                   toast.error(String(error));
                 } finally {

@@ -60,12 +60,12 @@ Release workflow behavior:
 
 1. Trigger on `v*` tag push.
 2. Run `npx changelogithub@latest` to generate release notes.
-3. Build bundles on:
+3. Build and publish bundles on:
    - `ubuntu-latest` (`deb`, `AppImage`)
    - `windows-latest` (`msi`, `nsis`)
    - `macos-latest` (`dmg`)
-4. Upload per-platform artifacts.
-5. Publish all generated artifacts into the GitHub release in a final aggregation job.
+4. Generate and upload updater manifest `latest.json` via `tauri-action`.
+5. Verify `latest.json` exists on the tagged release.
 
 Detailed runbook:
 

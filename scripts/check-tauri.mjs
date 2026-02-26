@@ -11,14 +11,20 @@ const candidates = [
 ].filter(Boolean);
 
 for (const candidate of candidates) {
-  const result = spawnSync(candidate, ["check", "--manifest-path", "src-tauri/Cargo.toml"], {
-    stdio: "inherit",
-  });
+  const result = spawnSync(
+    candidate,
+    ["check", "--manifest-path", "src-tauri/Cargo.toml"],
+    {
+      stdio: "inherit",
+    },
+  );
 
   if (!result.error && result.status === 0) {
     process.exit(0);
   }
 }
 
-console.error("Unable to run cargo check. Ensure Rust is installed and cargo is available.");
+console.error(
+  "Unable to run cargo check. Ensure Rust is installed and cargo is available.",
+);
 process.exit(1);

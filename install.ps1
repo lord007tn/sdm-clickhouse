@@ -9,9 +9,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Get-OsName {
-  if ($IsWindows) { return "windows" }
-  if ($IsLinux) { return "linux" }
-  if ($IsMacOS) { return "macos" }
+  $platform = [System.Runtime.InteropServices.OSPlatform]
+  if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($platform::Windows)) { return "windows" }
+  if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($platform::Linux)) { return "linux" }
+  if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($platform::OSX)) { return "macos" }
   return "unknown"
 }
 
@@ -105,6 +106,22 @@ function Assert-Sha256 {
   }
 }
 
+function Invoke-GitHubApi {
+  param(
+    [string]$Url,
+    [hashtable]$Headers
+  )
+  try {
+    return Invoke-RestMethod -Uri $Url -Headers $Headers
+  } catch {
+    $message = $_.Exception.Message
+    if ($message -match "404") {
+      throw "GitHub API returned 404 for '$Url'. Check repository name/visibility and set GITHUB_TOKEN (or GH_TOKEN) for private repositories."
+    }
+    throw
+  }
+}
+
 function Install-Asset {
   param(
     [string]$Path,
@@ -192,22 +209,40 @@ if ($osName -eq "unknown") {
   throw "Unsupported operating system."
 }
 
-$releaseUrl = if ($Version -eq "latest") {
-  "https://api.github.com/repos/$Repo/releases/latest"
-} else {
-  $tag = if ($Version.StartsWith("v")) { $Version } else { "v$Version" }
-  "https://api.github.com/repos/$Repo/releases/tags/$tag"
-}
-
-Write-Host "Resolving release metadata from $releaseUrl"
 $headers = @{ Accept = "application/vnd.github+json" }
 if ($GitHubToken) {
   $headers.Authorization = "Bearer $GitHubToken"
 }
-$release = Invoke-RestMethod -Uri $releaseUrl -Headers $headers
-$asset = Select-Asset -Assets $release.assets -OsName $osName -ArchName $archName
-if ($null -eq $asset) {
-  throw "No compatible release asset found for $osName/$archName."
+
+$release = $null
+$asset = $null
+
+if ($Version -eq "latest") {
+  $releaseUrl = "https://api.github.com/repos/$Repo/releases?per_page=20"
+  Write-Host "Resolving release metadata from $releaseUrl"
+  $candidates = Invoke-GitHubApi -Url $releaseUrl -Headers $headers
+  foreach ($candidate in $candidates) {
+    if ($candidate.draft -or $candidate.prerelease) { continue }
+    $candidateAsset = Select-Asset -Assets $candidate.assets -OsName $osName -ArchName $archName
+    if ($null -eq $candidateAsset) { continue }
+    $candidateDigest = [string]$candidateAsset.digest
+    if (-not $candidateDigest.StartsWith("sha256:")) { continue }
+    $release = $candidate
+    $asset = $candidateAsset
+    break
+  }
+  if ($null -eq $release -or $null -eq $asset) {
+    throw "No compatible release asset found for $osName/$archName."
+  }
+} else {
+  $tag = if ($Version.StartsWith("v")) { $Version } else { "v$Version" }
+  $releaseUrl = "https://api.github.com/repos/$Repo/releases/tags/$tag"
+  Write-Host "Resolving release metadata from $releaseUrl"
+  $release = Invoke-GitHubApi -Url $releaseUrl -Headers $headers
+  $asset = Select-Asset -Assets $release.assets -OsName $osName -ArchName $archName
+  if ($null -eq $asset) {
+    throw "No compatible release asset found for $osName/$archName in tag $tag."
+  }
 }
 
 $digest = [string]$asset.digest

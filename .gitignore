@@ -12,7 +12,9 @@ dist
 dist-ssr
 *.local
 src-tauri/target
+src-tauri/target-validation
 src-tauri/gen
+src-tauri/tauri.validation.conf.json
 test-results
 .tmp/*.log
 .tmp/*.pid

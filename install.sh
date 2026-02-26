@@ -100,7 +100,7 @@ if [[ "$OS_NAME" == "unsupported" ]]; then
 fi
 
 if [[ "$VERSION" == "latest" ]]; then
-  RELEASE_URL="https://api.github.com/repos/${REPO}/releases/latest"
+  RELEASE_URL="https://api.github.com/repos/${REPO}/releases?per_page=20"
 else
   TAG="$VERSION"
   [[ "$TAG" == v* ]] || TAG="v$TAG"
@@ -121,11 +121,10 @@ import sys
 
 os_name = sys.argv[1]
 arch = sys.argv[2]
-release = json.load(sys.stdin)
-assets = release.get("assets") or []
-tag = (release.get("tag_name") or "").lstrip("v")
+data = json.load(sys.stdin)
+releases = data if isinstance(data, list) else [data]
 
-def pick_asset():
+def pick_asset(assets):
     names = [(a, (a.get("name") or "").lower()) for a in assets]
     def find(pred):
         for asset, lower in names:
@@ -159,18 +158,34 @@ def pick_asset():
 
     return None
 
-asset = pick_asset()
-if not asset:
+selected_release = None
+selected_asset = None
+selected_sha256 = None
+
+for release in releases:
+    if release.get("draft") or release.get("prerelease"):
+        continue
+    assets = release.get("assets") or []
+    asset = pick_asset(assets)
+    if not asset:
+        continue
+    digest = (asset.get("digest") or "").lower().strip()
+    if not digest.startswith("sha256:"):
+        continue
+    selected_release = release
+    selected_asset = asset
+    selected_sha256 = digest.split(":", 1)[1]
+    break
+
+if not selected_release or not selected_asset or not selected_sha256:
     print("ERROR:No compatible asset found", end="")
     sys.exit(2)
 
-digest = (asset.get("digest") or "").lower().strip()
-if not digest.startswith("sha256:"):
-    print("ERROR:Missing SHA256 digest in release metadata", end="")
-    sys.exit(3)
-
-sha256 = digest.split(":", 1)[1]
-print(f"{tag}|{asset.get('name','')}|{asset.get('browser_download_url','')}|{sha256}", end="")
+tag = (selected_release.get("tag_name") or "").lstrip("v")
+print(
+    f"{tag}|{selected_asset.get('name','')}|{selected_asset.get('browser_download_url','')}|{selected_sha256}",
+    end="",
+)
 PY
 )"
 

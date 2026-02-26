@@ -21,6 +21,7 @@ pub struct AppState {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let dirs = ProjectDirs::from("cc", "SimpleSDM", "SimpleSDM")
                 .ok_or_else(|| anyhow::anyhow!("failed to resolve app data directory"))?;
