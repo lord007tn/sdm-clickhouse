@@ -4,6 +4,7 @@ set -euo pipefail
 REPO="${SIMPLE_SDM_REPO:-lord007tn/simple-sdm}"
 VERSION="${SIMPLE_SDM_VERSION:-latest}"
 CHECK_ONLY=0
+SYSTEM_INSTALL="${SIMPLE_SDM_SYSTEM_INSTALL:-0}"
 GITHUB_TOKEN_VALUE="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 
 usage() {
@@ -11,12 +12,13 @@ usage() {
 Simple SDM installer
 
 Usage:
-  install.sh [--version <version>] [--repo <owner/repo>] [--check]
+  install.sh [--version <version>] [--repo <owner/repo>] [--check] [--system]
 
 Environment:
   SIMPLE_SDM_VERSION=<version|latest>
   SIMPLE_SDM_REPO=<owner/repo>
   SIMPLE_SDM_APPIMAGE_DIR=<dir>   # default: ~/.local/bin
+  SIMPLE_SDM_SYSTEM_INSTALL=1      # optional, use system-level install paths
   GITHUB_TOKEN / GH_TOKEN          # optional, needed for private repos
 USAGE
 }
@@ -33,6 +35,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --check)
       CHECK_ONLY=1
+      shift
+      ;;
+    --system)
+      SYSTEM_INSTALL=1
       shift
       ;;
     -h|--help)
@@ -130,15 +136,16 @@ def pick_asset():
     if os_name == "linux":
         if arch == "arm64":
             return (
-                find(lambda n: n.endswith("_arm64.deb"))
+                find(lambda n: n.endswith(".appimage") and "aarch64" in n)
+                or find(lambda n: n.endswith(".appimage"))
+                or find(lambda n: n.endswith("_arm64.deb"))
                 or find(lambda n: n.endswith("_aarch64.deb"))
-                or find(lambda n: n.endswith(".appimage") and "aarch64" in n)
             )
         return (
-            find(lambda n: n.endswith("_amd64.deb"))
-            or find(lambda n: n.endswith("_x64.deb"))
-            or find(lambda n: n.endswith(".appimage") and "amd64" in n)
+            find(lambda n: n.endswith(".appimage") and "amd64" in n)
             or find(lambda n: n.endswith(".appimage"))
+            or find(lambda n: n.endswith("_amd64.deb"))
+            or find(lambda n: n.endswith("_x64.deb"))
         )
 
     if os_name == "macos":
@@ -208,8 +215,17 @@ install_linux() {
   name_lower="$(echo "$ASSET_NAME" | tr '[:upper:]' '[:lower:]')"
 
   if [[ "$name_lower" == *.deb ]]; then
-    if [[ "$(id -u)" -ne 0 && -n "$(command -v sudo || true)" ]]; then
-      sudo dpkg -i "$file"
+    if [[ "$SYSTEM_INSTALL" != "1" ]]; then
+      echo "Refusing system .deb install without --system. Re-run with --system or use AppImage." >&2
+      exit 1
+    fi
+    if [[ "$(id -u)" -ne 0 ]]; then
+      if command -v sudo >/dev/null 2>&1; then
+        sudo dpkg -i "$file"
+      else
+        echo "Root permission required for .deb install and sudo is unavailable." >&2
+        exit 1
+      fi
     else
       dpkg -i "$file"
     fi
@@ -245,9 +261,28 @@ install_macos() {
     echo "No .app found in DMG." >&2
     exit 1
   fi
-  cp -R "$app_path" /Applications/
+  local app_dest
+  if [[ "$SYSTEM_INSTALL" == "1" ]]; then
+    app_dest="/Applications"
+    if [[ ! -w "$app_dest" ]]; then
+      if command -v sudo >/dev/null 2>&1; then
+        sudo cp -R "$app_path" "$app_dest/"
+      else
+        echo "Write permission to /Applications denied and sudo is unavailable." >&2
+        hdiutil detach "$mount_dir" -quiet || true
+        exit 1
+      fi
+      hdiutil detach "$mount_dir" -quiet || true
+      echo "Installed $(basename "$app_path") into /Applications"
+      return
+    fi
+  else
+    app_dest="${HOME}/Applications"
+    mkdir -p "$app_dest"
+  fi
+  cp -R "$app_path" "$app_dest/"
   hdiutil detach "$mount_dir" -quiet || true
-  echo "Installed $(basename "$app_path") into /Applications"
+  echo "Installed $(basename "$app_path") into ${app_dest}"
 }
 
 case "$OS_NAME" in

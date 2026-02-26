@@ -2,6 +2,7 @@ param(
   [string]$Version = $(if ($env:SIMPLE_SDM_VERSION) { $env:SIMPLE_SDM_VERSION } else { "latest" }),
   [string]$Repo = $(if ($env:SIMPLE_SDM_REPO) { $env:SIMPLE_SDM_REPO } else { "lord007tn/simple-sdm" }),
   [string]$GitHubToken = $(if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } elseif ($env:GH_TOKEN) { $env:GH_TOKEN } else { "" }),
+  [switch]$SystemInstall,
   [switch]$CheckOnly
 )
 
@@ -48,31 +49,33 @@ function Select-Asset {
   if ($OsName -eq "windows") {
     if ($ArchName -eq "arm64") {
       return First-Asset @(
-        (Find-Asset { param($n) $n.EndsWith(".msi") -and $n.Contains("arm64") }),
-        (Find-Asset { param($n) $n.EndsWith(".exe") -and $n.Contains("arm64") })
+        (Find-Asset { param($n) $n.EndsWith(".exe") -and $n.Contains("arm64") }),
+        (Find-Asset { param($n) $n.EndsWith(".msi") -and $n.Contains("arm64") })
       )
     }
     return First-Asset @(
+      (Find-Asset { param($n) $n.EndsWith("-setup.exe") -and $n.Contains("x64") }),
+      (Find-Asset { param($n) $n.EndsWith(".exe") }),
       (Find-Asset { param($n) $n.EndsWith(".msi") -and $n.Contains("x64") }),
       (Find-Asset { param($n) $n.EndsWith(".msi") -and $n.Contains("amd64") }),
-      (Find-Asset { param($n) $n.EndsWith("-setup.exe") -and $n.Contains("x64") }),
-      (Find-Asset { param($n) $n.EndsWith(".exe") })
+      (Find-Asset { param($n) $n.EndsWith(".msi") })
     )
   }
 
   if ($OsName -eq "linux") {
     if ($ArchName -eq "arm64") {
       return First-Asset @(
+        (Find-Asset { param($n) $n.EndsWith(".appimage") -and $n.Contains("aarch64") }),
+        (Find-Asset { param($n) $n.EndsWith(".appimage") }),
         (Find-Asset { param($n) $n.EndsWith("_arm64.deb") }),
-        (Find-Asset { param($n) $n.EndsWith("_aarch64.deb") }),
-        (Find-Asset { param($n) $n.EndsWith(".appimage") -and $n.Contains("aarch64") })
+        (Find-Asset { param($n) $n.EndsWith("_aarch64.deb") })
       )
     }
     return First-Asset @(
-      (Find-Asset { param($n) $n.EndsWith("_amd64.deb") }),
-      (Find-Asset { param($n) $n.EndsWith("_x64.deb") }),
       (Find-Asset { param($n) $n.EndsWith(".appimage") -and $n.Contains("amd64") }),
-      (Find-Asset { param($n) $n.EndsWith(".appimage") })
+      (Find-Asset { param($n) $n.EndsWith(".appimage") }),
+      (Find-Asset { param($n) $n.EndsWith("_amd64.deb") }),
+      (Find-Asset { param($n) $n.EndsWith("_x64.deb") })
     )
   }
 
@@ -106,18 +109,28 @@ function Install-Asset {
   param(
     [string]$Path,
     [string]$AssetName,
-    [string]$OsName
+    [string]$OsName,
+    [bool]$SystemInstallMode = $false
   )
 
   $lower = $AssetName.ToLowerInvariant()
 
   if ($OsName -eq "windows") {
     if ($lower.EndsWith(".msi")) {
-      Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$Path`" /passive /norestart" -Wait
+      $args = if ($SystemInstallMode) {
+        "/i `"$Path`" /passive /norestart"
+      } else {
+        "/i `"$Path`" MSIINSTALLPERUSER=1 ALLUSERS=2 /qb /norestart"
+      }
+      Start-Process -FilePath "msiexec.exe" -ArgumentList $args -Wait
       return
     }
     if ($lower.EndsWith(".exe")) {
-      Start-Process -FilePath $Path -Wait
+      if ($SystemInstallMode) {
+        Start-Process -FilePath $Path -Wait
+      } else {
+        Start-Process -FilePath $Path -ArgumentList "/CURRENTUSER" -Wait
+      }
       return
     }
     throw "Unsupported Windows asset: $AssetName"
@@ -125,6 +138,9 @@ function Install-Asset {
 
   if ($OsName -eq "linux") {
     if ($lower.EndsWith(".deb")) {
+      if (-not $SystemInstallMode) {
+        throw "Refusing .deb install without -SystemInstall. Use AppImage for user-space install."
+      }
       if (Get-Command sudo -ErrorAction SilentlyContinue) {
         & sudo dpkg -i $Path
       } else {
@@ -158,7 +174,11 @@ function Install-Asset {
       & hdiutil detach $mountPoint -quiet | Out-Null
       throw "No .app found in DMG."
     }
-    Copy-Item -Recurse -Force -Path $app.FullName -Destination "/Applications/"
+    $destination = if ($SystemInstallMode) { "/Applications/" } else { (Join-Path $HOME "Applications") }
+    if (-not (Test-Path $destination)) {
+      New-Item -ItemType Directory -Path $destination -Force | Out-Null
+    }
+    Copy-Item -Recurse -Force -Path $app.FullName -Destination $destination
     & hdiutil detach $mountPoint -quiet | Out-Null
     return
   }
@@ -212,6 +232,6 @@ Invoke-WebRequest -Uri $asset.browser_download_url -Headers $headers -OutFile $t
 Assert-Sha256 -Path $tmpPath -Expected $expectedSha256
 Write-Host "SHA256 verified."
 
-Install-Asset -Path $tmpPath -AssetName $asset.name -OsName $osName
+Install-Asset -Path $tmpPath -AssetName $asset.name -OsName $osName -SystemInstallMode $SystemInstall.IsPresent
 
 Write-Host "Simple SDM installation complete."

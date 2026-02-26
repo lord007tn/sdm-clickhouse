@@ -50,11 +50,11 @@ irm https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.ps1 | ie
 Optional pinned version examples:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.sh | SIMPLE_SDM_VERSION=0.1.0 bash
+curl -fsSL https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.sh | SIMPLE_SDM_VERSION=0.1.1 bash
 ```
 
 ```powershell
-$env:SIMPLE_SDM_VERSION="0.1.0"; irm https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.ps1 | iex
+$env:SIMPLE_SDM_VERSION="0.1.1"; irm https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.ps1 | iex
 ```
 
 Both installers automatically:
@@ -63,6 +63,14 @@ Both installers automatically:
 2. Select the matching release artifact.
 3. Resolve the SHA256 digest from GitHub release metadata.
 4. Verify file integrity before launching installation.
+
+Default behavior is user-space install without sudo/admin when possible:
+
+1. Linux prefers AppImage in `~/.local/bin`.
+2. Windows prefers setup `.exe` and per-user MSI flags.
+3. macOS installs into `~/Applications`.
+
+Use `--system` (or `-SystemInstall` in PowerShell) only when you want system-wide install paths.
 
 If the repository is private, set `GITHUB_TOKEN` (or `GH_TOKEN`) before running installer commands.
 

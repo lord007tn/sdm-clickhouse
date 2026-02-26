@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.1] - 2026-02-26
+
+### Changed
+
+- Update flow now selects assets by runtime OS/arch with user-space-first strategy.
+- Linux update/install now prefers AppImage to avoid requiring sudo by default.
+- Windows update/install now prefers setup `.exe`; MSI uses per-user install flags.
+- macOS script install defaults to `~/Applications` for non-admin installs.
+- One-line install scripts (`install.sh`, `install.ps1`) now support optional system-level mode (`--system` / `-SystemInstall`).
+
+### Fixed
+
+- Connection defaults are auto-applied when host/port/database/username/timeouts are omitted.
+- Connection dialog now hides advanced CA cert and SSH tunnel fields behind toggles.
+- Linux keyring/DBus secure storage failures now fall back to local secret file storage.
+
 ## [0.1.0] - 2026-02-26
 
 ### Added
@@ -32,3 +48,4 @@ All notable changes to this project are documented in this file.
 - macOS: `.dmg`
 
 [0.1.0]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.0
+[0.1.1]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.1

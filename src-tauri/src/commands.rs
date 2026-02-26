@@ -294,25 +294,27 @@ fn select_asset_for_target<'a>(
 
     if os == "windows" {
         if arch == "arm64" {
-            return find(|name| name.ends_with(".msi") && name.contains("arm64"))
-                .or_else(|| find(|name| name.ends_with(".exe") && name.contains("arm64")));
+            return find(|name| name.ends_with(".exe") && name.contains("arm64"))
+                .or_else(|| find(|name| name.ends_with(".msi") && name.contains("arm64")));
         }
-        return find(|name| name.ends_with(".msi") && name.contains("x64"))
+        return find(|name| name.ends_with("-setup.exe") && name.contains("x64"))
+            .or_else(|| find(|name| name.ends_with(".exe")))
+            .or_else(|| find(|name| name.ends_with(".msi") && name.contains("x64")))
             .or_else(|| find(|name| name.ends_with(".msi") && name.contains("amd64")))
-            .or_else(|| find(|name| name.ends_with("-setup.exe") && name.contains("x64")))
-            .or_else(|| find(|name| name.ends_with(".exe")));
+            .or_else(|| find(|name| name.ends_with(".msi")));
     }
 
     if os == "linux" {
         if arch == "arm64" {
-            return find(|name| name.ends_with("_arm64.deb"))
-                .or_else(|| find(|name| name.ends_with("_aarch64.deb")))
-                .or_else(|| find(|name| name.ends_with(".appimage") && name.contains("aarch64")));
+            return find(|name| name.ends_with(".appimage") && name.contains("aarch64"))
+                .or_else(|| find(|name| name.ends_with(".appimage")))
+                .or_else(|| find(|name| name.ends_with("_arm64.deb")))
+                .or_else(|| find(|name| name.ends_with("_aarch64.deb")));
         }
-        return find(|name| name.ends_with("_amd64.deb"))
-            .or_else(|| find(|name| name.ends_with("_x64.deb")))
-            .or_else(|| find(|name| name.ends_with(".appimage") && name.contains("amd64")))
-            .or_else(|| find(|name| name.ends_with(".appimage")));
+        return find(|name| name.ends_with(".appimage") && name.contains("amd64"))
+            .or_else(|| find(|name| name.ends_with(".appimage")))
+            .or_else(|| find(|name| name.ends_with("_amd64.deb")))
+            .or_else(|| find(|name| name.ends_with("_x64.deb")));
     }
 
     if os == "macos" {
@@ -1320,7 +1322,9 @@ fn launch_installer(installer_path: &Path) -> anyhow::Result<()> {
             Command::new("msiexec")
                 .arg("/i")
                 .arg(installer_path)
-                .arg("/passive")
+                .arg("MSIINSTALLPERUSER=1")
+                .arg("ALLUSERS=2")
+                .arg("/qb")
                 .arg("/norestart")
                 .spawn()?;
         } else {
@@ -1342,6 +1346,17 @@ fn launch_installer(installer_path: &Path) -> anyhow::Result<()> {
             .and_then(|value| value.to_str())
             .unwrap_or_default()
             .to_ascii_lowercase();
+        if ext == "appimage" {
+            if let Ok(home) = std::env::var("HOME") {
+                let install_dir = PathBuf::from(home).join(".local").join("bin");
+                let _ = fs::create_dir_all(&install_dir);
+                let target = install_dir.join("simple-sdm.AppImage");
+                fs::copy(installer_path, &target)?;
+                let _ = Command::new("chmod").arg("+x").arg(&target).spawn();
+                let _ = Command::new(&target).spawn();
+                return Ok(());
+            }
+        }
         if ext == "deb" {
             if Command::new("pkexec")
                 .arg("dpkg")
