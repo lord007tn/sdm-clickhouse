@@ -22,6 +22,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -44,7 +46,7 @@ jobs:
   rust-check:
     name: Rust Check (Tauri)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,7 +63,9 @@ jobs:
             librsvg2-dev \
             patchelf \
             libxdo-dev \
-            libwebkit2gtk-4.1-dev
+            libwebkit2gtk-4.1-dev \
+            pkg-config \
+            libssl-dev
 
       - name: Cargo check
         run: cargo check --manifest-path src-tauri/Cargo.toml

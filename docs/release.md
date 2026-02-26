@@ -52,7 +52,8 @@ Release workflow behavior:
    - `ubuntu-latest` (`deb`, `AppImage`)
    - `windows-latest` (`msi`, `nsis`)
    - `macos-latest` (`dmg`)
-4. Upload generated artifacts to the GitHub release.
+4. Upload per-platform artifacts.
+5. Publish all generated artifacts into the GitHub release in a final aggregation job.
 
 Detailed runbook:
 
