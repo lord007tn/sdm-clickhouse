@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.3] - 2026-02-26
+
+### Fixed
+
+- Update check no longer hard-fails when updater endpoints are missing or release channel is temporarily unavailable.
+- Query row matching for destructive operations now handles complex values (Map/JSON/Array) via `toJSONString(...)` comparisons to prevent ClickHouse parse errors.
+
 ## [0.1.2] - 2026-02-26
 
 ### Changed
@@ -61,3 +68,4 @@ All notable changes to this project are documented in this file.
 [0.1.0]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.0
 [0.1.1]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.1
 [0.1.2]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.2
+[0.1.3]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.3

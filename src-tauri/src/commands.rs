@@ -1272,10 +1272,15 @@ pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheck
 
     let response = request.send().await.map_err(|err| err.to_string())?;
     if !response.status().is_success() {
-        return Err(format!(
-            "Release check request failed with HTTP {}",
-            response.status()
-        ));
+        return Ok(UpdateCheckResult {
+            available: false,
+            current_version,
+            latest_version: None,
+            asset_name: None,
+            download_url: None,
+            sha256: None,
+            target,
+        });
     }
     let release = response
         .json::<GithubRelease>()

@@ -130,6 +130,11 @@ function buildWhereClause(
     .map((col) => {
       const val = row[col];
       if (val === null || val === undefined) return `\`${col}\` IS NULL`;
+      if (typeof val === "object") {
+        // Complex ClickHouse types (Map/Array/Tuple/JSON-like payloads) are
+        // compared via JSON text to avoid parser/type coercion errors.
+        return `toJSONString(\`${col}\`) = ${valueToSql(JSON.stringify(val))}`;
+      }
       return `\`${col}\` = ${valueToSql(val)}`;
     })
     .join(" AND ");
@@ -164,7 +169,7 @@ function Skeleton({
   );
 }
 
-const APP_VERSION = "0.1.2";
+const APP_VERSION = "0.1.3";
 const TAB_STORAGE_KEY = "simple-sdm.tabs.v1";
 
 const baseConnection: ConnectionInput = {
@@ -1182,7 +1187,15 @@ function App() {
             sha256: undefined,
             targetLabel: undefined,
           }));
-          toast.success("You're on the latest version!");
+          const primary = String(error).toLowerCase();
+          if (
+            primary.includes("does not have any endpoints set") ||
+            primary.includes("404")
+          ) {
+            toast("Update channel is not configured for this build yet.");
+          } else {
+            toast.success("You're on the latest version!");
+          }
           return;
         }
         setUpdater((s) => ({

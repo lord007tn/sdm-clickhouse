@@ -50,11 +50,11 @@ irm https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.ps1 | ie
 Optional pinned version examples:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.sh | SIMPLE_SDM_VERSION=0.1.2 bash
+curl -fsSL https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.sh | SIMPLE_SDM_VERSION=0.1.3 bash
 ```
 
 ```powershell
-$env:SIMPLE_SDM_VERSION="0.1.2"; irm https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.ps1 | iex
+$env:SIMPLE_SDM_VERSION="0.1.3"; irm https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.ps1 | iex
 ```
 
 Both installers automatically:
