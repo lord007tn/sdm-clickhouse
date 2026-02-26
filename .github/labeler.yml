@@ -1,0 +1,40 @@
+frontend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/**"
+
+backend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src-tauri/src/**"
+
+ui:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/components/**"
+
+ci/cd:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "README.md"
+          - "plan/**"
+          - "**/*.md"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "package.json"
+          - "pnpm-lock.yaml"
+          - "src-tauri/Cargo.toml"
+          - "src-tauri/Cargo.lock"
+
+tauri-config:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src-tauri/tauri.conf.json"

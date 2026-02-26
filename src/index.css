@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "IBM Plex Sans Variable", "Segoe UI", sans-serif;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(
+        circle at 12% 8%,
+        hsl(195 86% 55% / 0.08),
+        transparent 34%
+      ),
+      radial-gradient(
+        circle at 82% 12%,
+        hsl(31 94% 52% / 0.06),
+        transparent 30%
+      ),
+      linear-gradient(180deg, hsl(220 18% 8%), hsl(220 16% 6%));
+  }
+
+  :root {
+    --background: 222 26% 8%;
+    --foreground: 216 20% 94%;
+    --card: 222 24% 11%;
+    --card-foreground: 214 24% 92%;
+    --popover: 220 24% 10%;
+    --popover-foreground: 214 24% 92%;
+    --primary: 194 94% 54%;
+    --primary-foreground: 218 38% 8%;
+    --secondary: 220 19% 18%;
+    --secondary-foreground: 214 24% 92%;
+    --muted: 219 17% 16%;
+    --muted-foreground: 214 9% 65%;
+    --accent: 32 95% 52%;
+    --accent-foreground: 218 38% 8%;
+    --destructive: 0 74% 56%;
+    --destructive-foreground: 214 24% 92%;
+    --border: 218 16% 24%;
+    --input: 218 18% 18%;
+    --ring: 194 94% 54%;
+    --chart-1: 194 94% 54%;
+    --chart-2: 32 95% 52%;
+    --chart-3: 154 69% 44%;
+    --chart-4: 284 71% 57%;
+    --chart-5: 5 80% 59%;
+    --radius: 0.65rem;
+  }
+}
+
+@layer components {
+  .mono {
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  .glass {
+    background: linear-gradient(
+      165deg,
+      hsl(222 24% 13% / 0.92),
+      hsl(222 24% 10% / 0.9)
+    );
+    backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--border));
+  }
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-pulse {
+  background: linear-gradient(
+    90deg,
+    hsl(219 17% 16% / 0.3) 25%,
+    hsl(219 17% 16% / 0.6) 50%,
+    hsl(219 17% 16% / 0.3) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(218 16% 24% / 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(218 16% 24% / 0.8);
+}
+
+/* Desktop app feel */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+textarea,
+input,
+.mono,
+code,
+pre,
+[contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
