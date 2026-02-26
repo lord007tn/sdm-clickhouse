@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.4] - 2026-02-26
+
+### Added
+
+- Release workflow now publishes updater manifest `latest.json` using `tauri-action`.
+- Biome-based lint workflow and Playwright smoke checks for CI quality gates.
+
+### Changed
+
+- Updater release channel handling now reports clearer GitHub visibility/auth errors.
+- Connection import/export/backup/restore moved to native file dialogs.
+- Build output chunking tuned to remove large-chunk warnings.
+
 ## [0.1.3] - 2026-02-26
 
 ### Fixed
@@ -69,3 +82,4 @@ All notable changes to this project are documented in this file.
 [0.1.1]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.1
 [0.1.2]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.2
 [0.1.3]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.3
+[0.1.4]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.4

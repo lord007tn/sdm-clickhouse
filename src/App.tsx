@@ -169,7 +169,7 @@ function Skeleton({
   );
 }
 
-const APP_VERSION = "0.1.3";
+const APP_VERSION = "0.1.4";
 const TAB_STORAGE_KEY = "simple-sdm.tabs.v1";
 
 const baseConnection: ConnectionInput = {
