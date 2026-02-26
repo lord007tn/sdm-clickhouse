@@ -164,7 +164,7 @@ function Skeleton({
   );
 }
 
-const APP_VERSION = "0.1.1";
+const APP_VERSION = "0.1.2";
 const TAB_STORAGE_KEY = "simple-sdm.tabs.v1";
 
 const baseConnection: ConnectionInput = {
@@ -1258,6 +1258,21 @@ function App() {
           }));
         }
       });
+
+      try {
+        await api.appRequestRestart();
+        return;
+      } catch (restartError) {
+        setUpdater((s) => ({
+          ...s,
+          done: true,
+          downloading: false,
+          progress: 100,
+        }));
+        toast.success(
+          `Update installed. Restart to finish: ${String(restartError)}`,
+        );
+      }
     } catch (error) {
       setUpdater((s) => ({ ...s, downloading: false }));
       toast.error(`Update failed: ${String(error)}`);

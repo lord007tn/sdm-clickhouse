@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.2] - 2026-02-26
+
+### Changed
+
+- Built-in updater now requests app restart automatically after successful install.
+- Windows fallback installer now uses per-user setup arguments by default.
+
+### Fixed
+
+- Reduced manual steps during update flow (no manual app close/reopen for built-in update path).
+
 ## [0.1.1] - 2026-02-26
 
 ### Changed
@@ -49,3 +60,4 @@ All notable changes to this project are documented in this file.
 
 [0.1.0]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.0
 [0.1.1]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.1
+[0.1.2]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.2

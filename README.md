@@ -50,11 +50,11 @@ irm https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.ps1 | ie
 Optional pinned version examples:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.sh | SIMPLE_SDM_VERSION=0.1.1 bash
+curl -fsSL https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.sh | SIMPLE_SDM_VERSION=0.1.2 bash
 ```
 
 ```powershell
-$env:SIMPLE_SDM_VERSION="0.1.1"; irm https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.ps1 | iex
+$env:SIMPLE_SDM_VERSION="0.1.2"; irm https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.ps1 | iex
 ```
 
 Both installers automatically:
@@ -104,6 +104,7 @@ cargo check --manifest-path src-tauri/Cargo.toml
 2. Build desktop bundles on Linux/Windows/macOS
 3. Upload artifacts to the GitHub release
 - In-app updater flow checks for updates and uses OS/arch-specific release assets with SHA256 verification before installer launch.
+- Built-in updater path requests app restart automatically after successful install.
 
 ## Documentation
 

@@ -1233,6 +1233,14 @@ pub fn app_startup_status(state: State<'_, AppState>) -> Result<Option<String>, 
 }
 
 #[tauri::command]
+pub fn app_request_restart(app: tauri::AppHandle) -> Result<CommandMessage, String> {
+    app.request_restart();
+    Ok(CommandMessage {
+        message: "Restart requested to finish update.".to_string(),
+    })
+}
+
+#[tauri::command]
 pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheckResult, String> {
     let current_version = env!("CARGO_PKG_VERSION").to_string();
     let (os, arch, target) = runtime_target();
@@ -1328,7 +1336,9 @@ fn launch_installer(installer_path: &Path) -> anyhow::Result<()> {
                 .arg("/norestart")
                 .spawn()?;
         } else {
-            Command::new(installer_path).spawn()?;
+            Command::new(installer_path)
+                .arg("/CURRENTUSER")
+                .spawn()?;
         }
         Ok(())
     }

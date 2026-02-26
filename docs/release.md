@@ -29,6 +29,7 @@ Artifacts are generated under:
 - The app includes `tauri-plugin-updater` (Rust + JS).
 - UI exposes a "Updates" action in the top toolbar.
 - Fallback updater path resolves the latest GitHub release for the current OS/arch, verifies SHA256, and launches the installer.
+- Built-in updater flow requests restart automatically after successful install.
 - To enable production updates, configure:
   - release artifact hosting
   - updater endpoint manifest
