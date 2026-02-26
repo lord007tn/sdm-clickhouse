@@ -6,6 +6,11 @@ on:
     paths:
       - ".github/labels.yml"
       - ".github/workflows/label-sync.yml"
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/labels.yml"
+      - ".github/workflows/label-sync.yml"
   workflow_dispatch:
 
 permissions:
