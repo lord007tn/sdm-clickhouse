@@ -33,6 +33,39 @@ If Rust commands are not found in your current terminal session, refresh PATH on
 $env:Path += ";$env:USERPROFILE\.cargo\bin"
 ```
 
+## One-Line Installers
+
+Unix-like (`curl`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.sh | bash
+```
+
+Windows PowerShell (`irm`):
+
+```powershell
+irm https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.ps1 | iex
+```
+
+Optional pinned version examples:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.sh | SIMPLE_SDM_VERSION=0.1.0 bash
+```
+
+```powershell
+$env:SIMPLE_SDM_VERSION="0.1.0"; irm https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.ps1 | iex
+```
+
+Both installers automatically:
+
+1. Detect OS and CPU architecture.
+2. Select the matching release artifact.
+3. Resolve the SHA256 digest from GitHub release metadata.
+4. Verify file integrity before launching installation.
+
+If the repository is private, set `GITHUB_TOKEN` (or `GH_TOKEN`) before running installer commands.
+
 ## Run (Desktop Dev)
 
 ```powershell
@@ -62,6 +95,7 @@ cargo check --manifest-path src-tauri/Cargo.toml
 1. Generate release notes with `npx changelogithub@latest`
 2. Build desktop bundles on Linux/Windows/macOS
 3. Upload artifacts to the GitHub release
+- In-app updater flow checks for updates and uses OS/arch-specific release assets with SHA256 verification before installer launch.
 
 ## Documentation
 

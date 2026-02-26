@@ -1,7 +1,10 @@
 use std::time::Instant;
 use std::{fs, path::PathBuf};
+use std::{path::Path, process::Command};
 
 use keyring::Entry;
+use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use serde_json::Value;
 use tauri::State;
 use uuid::Uuid;
@@ -15,7 +18,7 @@ use crate::db;
 use crate::models::{
     AppLogItem, AuditItem, CommandMessage, ConnectionDiagnostics, ConnectionExport, ConnectionInput,
     ConnectionProfile, CountPreview, DdlRequest, HistoryItem, MutationRequest, QueryRequest,
-    QueryResult, SnippetInput, SnippetItem,
+    QueryResult, SnippetInput, SnippetItem, UpdateCheckResult,
 };
 use crate::AppState;
 
@@ -143,6 +146,111 @@ fn get_connection_with_secret(
     let profile = db::get_connection(&state.db_path, connection_id)?;
     let password = read_secret(connection_id)?;
     Ok((profile, password))
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubReleaseAsset {
+    name: String,
+    browser_download_url: String,
+    digest: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubRelease {
+    tag_name: String,
+    assets: Vec<GithubReleaseAsset>,
+}
+
+fn parse_semver(raw: &str) -> Vec<u32> {
+    raw.trim_start_matches('v')
+        .split('.')
+        .map(|piece| piece.parse::<u32>().unwrap_or(0))
+        .collect()
+}
+
+fn is_newer_version(candidate: &str, current: &str) -> bool {
+    let left = parse_semver(candidate);
+    let right = parse_semver(current);
+    let max_len = left.len().max(right.len());
+    for idx in 0..max_len {
+        let lv = left.get(idx).copied().unwrap_or(0);
+        let rv = right.get(idx).copied().unwrap_or(0);
+        if lv > rv {
+            return true;
+        }
+        if lv < rv {
+            return false;
+        }
+    }
+    false
+}
+
+fn runtime_target() -> (&'static str, &'static str, String) {
+    let os = match std::env::consts::OS {
+        "windows" => "windows",
+        "linux" => "linux",
+        "macos" => "macos",
+        _ => "unknown",
+    };
+    let arch = match std::env::consts::ARCH {
+        "x86_64" | "amd64" => "x64",
+        "aarch64" | "arm64" => "arm64",
+        _ => "unknown",
+    };
+    (os, arch, format!("{os}/{arch}"))
+}
+
+fn release_sha256(asset: &GithubReleaseAsset) -> Option<String> {
+    let digest = asset.digest.as_deref()?.trim().to_ascii_lowercase();
+    digest
+        .strip_prefix("sha256:")
+        .map(|value| value.to_string())
+}
+
+fn select_asset_for_target<'a>(
+    assets: &'a [GithubReleaseAsset],
+    os: &str,
+    arch: &str,
+) -> Option<&'a GithubReleaseAsset> {
+    let find = |predicate: fn(&str) -> bool| {
+        assets
+            .iter()
+            .find(|asset| predicate(&asset.name.to_ascii_lowercase()))
+    };
+
+    if os == "windows" {
+        if arch == "arm64" {
+            return find(|name| name.ends_with(".msi") && name.contains("arm64"))
+                .or_else(|| find(|name| name.ends_with(".exe") && name.contains("arm64")));
+        }
+        return find(|name| name.ends_with(".msi") && name.contains("x64"))
+            .or_else(|| find(|name| name.ends_with(".msi") && name.contains("amd64")))
+            .or_else(|| find(|name| name.ends_with("-setup.exe") && name.contains("x64")))
+            .or_else(|| find(|name| name.ends_with(".exe")));
+    }
+
+    if os == "linux" {
+        if arch == "arm64" {
+            return find(|name| name.ends_with("_arm64.deb"))
+                .or_else(|| find(|name| name.ends_with("_aarch64.deb")))
+                .or_else(|| find(|name| name.ends_with(".appimage") && name.contains("aarch64")));
+        }
+        return find(|name| name.ends_with("_amd64.deb"))
+            .or_else(|| find(|name| name.ends_with("_x64.deb")))
+            .or_else(|| find(|name| name.ends_with(".appimage") && name.contains("amd64")))
+            .or_else(|| find(|name| name.ends_with(".appimage")));
+    }
+
+    if os == "macos" {
+        if arch == "arm64" {
+            return find(|name| name.ends_with("_aarch64.dmg"));
+        }
+        return find(|name| name.ends_with("_x64.dmg"))
+            .or_else(|| find(|name| name.ends_with("_amd64.dmg")))
+            .or_else(|| find(|name| name.ends_with(".dmg")));
+    }
+
+    None
 }
 
 #[tauri::command]
@@ -1059,4 +1167,205 @@ pub fn app_restore_metadata(
 #[tauri::command]
 pub fn app_startup_status(state: State<'_, AppState>) -> Result<Option<String>, String> {
     Ok(state.startup_notice.clone())
+}
+
+#[tauri::command]
+pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheckResult, String> {
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+    let (os, arch, target) = runtime_target();
+    if os == "unknown" || arch == "unknown" {
+        return Ok(UpdateCheckResult {
+            available: false,
+            current_version,
+            latest_version: None,
+            asset_name: None,
+            download_url: None,
+            sha256: None,
+            target,
+        });
+    }
+
+    let repo = std::env::var("SIMPLE_SDM_UPDATER_REPO")
+        .unwrap_or_else(|_| "lord007tn/simple-sdm".to_string());
+    let endpoint = format!("https://api.github.com/repos/{repo}/releases/latest");
+    let mut request = reqwest::Client::new()
+        .get(endpoint)
+        .header("Accept", "application/vnd.github+json")
+        .header("User-Agent", "simple-sdm-updater");
+
+    if let Ok(token) = std::env::var("GITHUB_TOKEN").or_else(|_| std::env::var("GH_TOKEN")) {
+        if !token.trim().is_empty() {
+            request = request.bearer_auth(token.trim());
+        }
+    }
+
+    let response = request.send().await.map_err(|err| err.to_string())?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "Release check request failed with HTTP {}",
+            response.status()
+        ));
+    }
+    let release = response
+        .json::<GithubRelease>()
+        .await
+        .map_err(|err| err.to_string())?;
+    let latest_version = release.tag_name.trim_start_matches('v').to_string();
+    if latest_version.is_empty() || !is_newer_version(&latest_version, &current_version) {
+        return Ok(UpdateCheckResult {
+            available: false,
+            current_version,
+            latest_version: Some(latest_version),
+            asset_name: None,
+            download_url: None,
+            sha256: None,
+            target,
+        });
+    }
+
+    let Some(asset) = select_asset_for_target(&release.assets, os, arch) else {
+        return Ok(UpdateCheckResult {
+            available: false,
+            current_version,
+            latest_version: Some(latest_version),
+            asset_name: None,
+            download_url: None,
+            sha256: None,
+            target,
+        });
+    };
+    let sha256 = release_sha256(asset);
+
+    Ok(UpdateCheckResult {
+        available: sha256.is_some(),
+        current_version,
+        latest_version: Some(latest_version),
+        asset_name: Some(asset.name.clone()),
+        download_url: Some(asset.browser_download_url.clone()),
+        sha256,
+        target,
+    })
+}
+
+fn launch_installer(installer_path: &Path) -> anyhow::Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        let ext = installer_path
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if ext == "msi" {
+            Command::new("msiexec")
+                .arg("/i")
+                .arg(installer_path)
+                .arg("/passive")
+                .arg("/norestart")
+                .spawn()?;
+        } else {
+            Command::new(installer_path).spawn()?;
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open").arg(installer_path).spawn()?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let ext = installer_path
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if ext == "deb" {
+            if Command::new("pkexec")
+                .arg("dpkg")
+                .arg("-i")
+                .arg(installer_path)
+                .spawn()
+                .is_ok()
+            {
+                return Ok(());
+            }
+        }
+        let _ = Command::new("chmod").arg("+x").arg(installer_path).spawn();
+        Command::new("xdg-open").arg(installer_path).spawn()?;
+        Ok(())
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        anyhow::bail!("Current OS is not supported for in-app installer launch.");
+    }
+}
+
+#[tauri::command]
+pub async fn app_install_update(
+    _state: State<'_, AppState>,
+    download_url: String,
+    sha256: String,
+    asset_name: String,
+) -> Result<CommandMessage, String> {
+    let safe_name = asset_name
+        .trim()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    if safe_name.is_empty() {
+        return Err("Asset name is required.".to_string());
+    }
+    let expected_hash = sha256.trim().to_ascii_lowercase();
+    if expected_hash.len() != 64 || !expected_hash.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err("SHA256 hash is invalid.".to_string());
+    }
+    if !download_url.starts_with("https://") {
+        return Err("Download URL must use HTTPS.".to_string());
+    }
+    if !download_url.contains("github.com/") {
+        return Err("Only GitHub-hosted releases are allowed.".to_string());
+    }
+
+    let response = reqwest::Client::new()
+        .get(download_url.trim())
+        .send()
+        .await
+        .map_err(|err| err.to_string())?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "Failed to download update asset: HTTP {}",
+            response.status()
+        ));
+    }
+    let bytes = response.bytes().await.map_err(|err| err.to_string())?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    let actual_hash = format!("{:x}", hasher.finalize());
+    if actual_hash != expected_hash {
+        return Err(format!(
+            "Hash mismatch. expected={}, actual={}",
+            expected_hash, actual_hash
+        ));
+    }
+
+    let installer_path = std::env::temp_dir().join(format!("simple-sdm-update-{}", safe_name));
+    fs::write(&installer_path, &bytes).map_err(|err| err.to_string())?;
+    launch_installer(&installer_path).map_err(|err| err.to_string())?;
+
+    Ok(CommandMessage {
+        message: format!(
+            "Update installer launched (SHA256 verified): {}",
+            installer_path.display()
+        ),
+    })
 }

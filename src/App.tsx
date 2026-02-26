@@ -91,6 +91,14 @@ type PendingEdit = {
   newValue: unknown;
 };
 
+type GithubUpdateInfo = {
+  version: string;
+  assetName: string;
+  downloadUrl: string;
+  sha256: string;
+  targetLabel: string;
+};
+
 /* ────────────────────────────── Helpers ──────────────────────────── */
 
 function parseTableFromSql(
@@ -302,6 +310,11 @@ function App() {
     downloading: boolean;
     progress: number;
     version?: string;
+    source?: "tauri" | "github";
+    assetName?: string;
+    downloadUrl?: string;
+    sha256?: string;
+    targetLabel?: string;
     done: boolean;
   }>({
     checking: false,
@@ -1068,17 +1081,46 @@ function App() {
   };
 
   /* ── Updater ── */
+  const checkGithubReleaseUpdate = async (): Promise<GithubUpdateInfo | null> => {
+    const result = await api.appCheckUpdate();
+    if (
+      !result.available ||
+      !result.latestVersion ||
+      !result.assetName ||
+      !result.downloadUrl ||
+      !result.sha256
+    ) {
+      return null;
+    }
+    return {
+      version: result.latestVersion,
+      assetName: result.assetName,
+      downloadUrl: result.downloadUrl,
+      sha256: result.sha256,
+      targetLabel: result.target,
+    };
+  };
+
   const checkForUpdates = async () => {
     if (!isTauriRuntime) {
       toast.error("Updater is only available in Tauri runtime.");
       return;
     }
-    setUpdater((s) => ({ ...s, checking: true }));
+    setUpdater((s) => ({ ...s, checking: true, done: false }));
     try {
       const update = await check();
       if (!update) {
         toast.success("You're on the latest version!");
-        setUpdater((s) => ({ ...s, checking: false, available: false }));
+        setUpdater((s) => ({
+          ...s,
+          checking: false,
+          available: false,
+          source: undefined,
+          assetName: undefined,
+          downloadUrl: undefined,
+          sha256: undefined,
+          targetLabel: undefined,
+        }));
         return;
       }
       setUpdater((s) => ({
@@ -1086,11 +1128,50 @@ function App() {
         checking: false,
         available: true,
         version: update.version,
+        source: "tauri",
+        assetName: undefined,
+        downloadUrl: undefined,
+        sha256: undefined,
+        targetLabel: undefined,
       }));
       toast.success(`Update v${update.version} available.`);
     } catch (error) {
-      setUpdater((s) => ({ ...s, checking: false }));
-      toast.error(`Update check failed: ${String(error)}`);
+      try {
+        const githubUpdate = await checkGithubReleaseUpdate();
+        if (!githubUpdate) {
+          setUpdater((s) => ({
+            ...s,
+            checking: false,
+            available: false,
+            source: undefined,
+            assetName: undefined,
+            downloadUrl: undefined,
+            sha256: undefined,
+            targetLabel: undefined,
+          }));
+          toast.success("You're on the latest version!");
+          return;
+        }
+        setUpdater((s) => ({
+          ...s,
+          checking: false,
+          available: true,
+          version: githubUpdate.version,
+          source: "github",
+          assetName: githubUpdate.assetName,
+          downloadUrl: githubUpdate.downloadUrl,
+          sha256: githubUpdate.sha256,
+          targetLabel: githubUpdate.targetLabel,
+        }));
+        toast.success(
+          `Update v${githubUpdate.version} available for ${githubUpdate.targetLabel}.`,
+        );
+      } catch (fallbackError) {
+        setUpdater((s) => ({ ...s, checking: false }));
+        toast.error(
+          `Update check failed: ${String(error)} | ${String(fallbackError)}`,
+        );
+      }
     }
   };
 
@@ -1098,8 +1179,33 @@ function App() {
     if (!isTauriRuntime) return;
     setUpdater((s) => ({ ...s, downloading: true, progress: 0 }));
     try {
+      if (
+        updater.source === "github" &&
+        updater.downloadUrl &&
+        updater.sha256 &&
+        updater.assetName
+      ) {
+        const response = await api.appInstallUpdate(
+          updater.downloadUrl,
+          updater.sha256,
+          updater.assetName,
+        );
+        setUpdater((s) => ({
+          ...s,
+          downloading: false,
+          done: true,
+          progress: 100,
+          available: false,
+        }));
+        toast.success(response.message);
+        return;
+      }
+
       const update = await check();
-      if (!update) return;
+      if (!update) {
+        setUpdater((s) => ({ ...s, downloading: false, progress: 0 }));
+        return;
+      }
       let totalSize = 0;
       let downloaded = 0;
       await update.downloadAndInstall((event) => {
@@ -1461,6 +1567,11 @@ function App() {
               <button
                 className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/10"
                 onClick={() => void downloadUpdate()}
+                title={
+                  updater.source === "github"
+                    ? `Install ${updater.assetName ?? "release asset"} (${updater.targetLabel ?? "runtime"})`
+                    : "Download and install update"
+                }
               >
                 <Download className="h-3 w-3" />
                 v{updater.version}

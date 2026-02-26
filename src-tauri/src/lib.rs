@@ -71,6 +71,8 @@ pub fn run() {
             commands::app_backup_metadata,
             commands::app_restore_metadata,
             commands::app_startup_status,
+            commands::app_check_update,
+            commands::app_install_update,
             commands::insert_row,
             commands::update_rows_preview,
             commands::update_rows_execute,

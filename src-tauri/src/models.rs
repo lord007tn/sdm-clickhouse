@@ -188,3 +188,15 @@ pub struct AppLogItem {
     pub context_json: Option<String>,
     pub created_at: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCheckResult {
+    pub available: bool,
+    pub current_version: String,
+    pub latest_version: Option<String>,
+    pub asset_name: Option<String>,
+    pub download_url: Option<String>,
+    pub sha256: Option<String>,
+    pub target: String,
+}

@@ -48,6 +48,8 @@
 - `app_backup_metadata(targetPath)`
 - `app_restore_metadata(sourcePath)`
 - `app_startup_status()`
+- `app_check_update()`
+- `app_install_update(downloadUrl, sha256, assetName)`
 
 ## Notes
 

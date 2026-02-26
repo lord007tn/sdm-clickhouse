@@ -28,10 +28,21 @@ Artifacts are generated under:
 
 - The app includes `tauri-plugin-updater` (Rust + JS).
 - UI exposes a "Updates" action in the top toolbar.
+- Fallback updater path resolves the latest GitHub release for the current OS/arch, verifies SHA256, and launches the installer.
 - To enable production updates, configure:
   - release artifact hosting
   - updater endpoint manifest
   - signing key/public key in Tauri updater config
+
+## Installer Scripts
+
+- `install.sh` supports `curl ... | bash` flow on Linux/macOS.
+- `install.ps1` supports `irm ... | iex` flow on Windows.
+- Both scripts:
+  1. Detect OS and architecture
+  2. Pick the matching release artifact
+  3. Verify SHA256 from GitHub release metadata
+  4. Run installation
 
 ## Cross-Platform Release
 

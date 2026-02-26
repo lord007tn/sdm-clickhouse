@@ -145,3 +145,13 @@ export type DdlRequest = {
   engine?: string;
   confirmToken?: string;
 };
+
+export type UpdateCheckResult = {
+  available: boolean;
+  currentVersion: string;
+  latestVersion?: string;
+  assetName?: string;
+  downloadUrl?: string;
+  sha256?: string;
+  target: string;
+};

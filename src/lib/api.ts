@@ -14,6 +14,7 @@ import type {
   QueryResult,
   SnippetInput,
   SnippetItem,
+  UpdateCheckResult,
 } from "@/types";
 
 function isTauriRuntime() {
@@ -144,4 +145,14 @@ export const api = {
 
   appStartupStatus: () =>
     tauriInvoke<string | null>("app_startup_status"),
+
+  appCheckUpdate: () =>
+    tauriInvoke<UpdateCheckResult>("app_check_update"),
+
+  appInstallUpdate: (downloadUrl: string, sha256: string, assetName: string) =>
+    tauriInvoke<CommandMessage>("app_install_update", {
+      downloadUrl,
+      sha256,
+      assetName,
+    }),
 };
