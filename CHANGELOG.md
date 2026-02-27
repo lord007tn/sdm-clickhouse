@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.5] - 2026-02-27
+
+### Fixed
+
+- Rotated updater signing key and synchronized release secrets for successful signed bundles.
+- Updated release workflow path now publishes updater `latest.json` with matching signing key.
+
 ## [0.1.4] - 2026-02-26
 
 ### Added
@@ -83,3 +90,4 @@ All notable changes to this project are documented in this file.
 [0.1.2]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.2
 [0.1.3]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.3
 [0.1.4]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.4
+[0.1.5]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.5

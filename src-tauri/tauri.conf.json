@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Simple SDM",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "identifier": "cc.raedb.simple-sdm",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -40,7 +40,7 @@
       "endpoints": [
         "https://github.com/lord007tn/simple-sdm/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQzOEZDMTFEQ0UxRTAxM0QKUldROUFSN09IY0dQUThqYTBPU280ZzA1ZnJ6eEg4WjdKZTNXUTF6aStESHBGWENnbWd1K3R2aHMK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEzQzM1QkRGQUVBQzRBNzgKUldSNFNxeXUzMXZERS9LdmpUbmNKQjRENXdIeG82YzBVNVIvVUFWbGt6ZnVySkQ1YmdRNnlJYUkK"
     }
   }
 }
