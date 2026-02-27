@@ -280,6 +280,9 @@ function App() {
   const [snippets, setSnippets] = useState<
     { id: string; name: string; sql: string }[]
   >([]);
+  const [snippetDialogOpen, setSnippetDialogOpen] = useState(false);
+  const [snippetName, setSnippetName] = useState("");
+  const [savingSnippet, setSavingSnippet] = useState(false);
   const [auditItems, setAuditItems] = useState<AuditItem[]>([]);
   const [appLogs, setAppLogs] = useState<AppLogItem[]>([]);
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
@@ -770,6 +773,39 @@ function App() {
     };
     setTabs((prev) => [...prev, tab]);
     setActiveTabId(tab.id);
+  };
+
+  const openSnippetDialog = () => {
+    if (!isTauriRuntime) {
+      toast.error("Run this app with `pnpm tauri dev`.");
+      return;
+    }
+    if (!activeTab || !activeConnectionId) return;
+    setSnippetName("");
+    setSnippetDialogOpen(true);
+  };
+
+  const saveSnippet = async () => {
+    if (!activeTab || !activeConnectionId) return;
+    const name = snippetName.trim();
+    if (!name) return;
+    setSavingSnippet(true);
+    try {
+      await api.snippetSave({
+        name,
+        sql: activeTab.sql,
+        connectionId: activeConnectionId,
+        tags: ["manual"],
+      });
+      toast.success("Snippet saved.");
+      setSnippetDialogOpen(false);
+      setSnippetName("");
+      void loadWorkspace().catch((error) => toast.error(String(error)));
+    } catch (error) {
+      toast.error(String(error));
+    } finally {
+      setSavingSnippet(false);
+    }
   };
 
   const moveTab = (tabId: string, direction: -1 | 1) => {
@@ -2038,25 +2074,8 @@ function App() {
                 size="sm"
                 variant="ghost"
                 className="h-7 gap-1.5 px-2.5 text-xs"
-                onClick={async () => {
-                  if (!isTauriRuntime) {
-                    toast.error("Run this app with `pnpm tauri dev`.");
-                    return;
-                  }
-                  if (!activeTab || !activeConnectionId) return;
-                  const name = window.prompt("Snippet name");
-                  if (!name) return;
-                  await api.snippetSave({
-                    name,
-                    sql: activeTab.sql,
-                    connectionId: activeConnectionId,
-                    tags: ["manual"],
-                  });
-                  toast.success("Snippet saved.");
-                  void loadWorkspace().catch((error) =>
-                    toast.error(String(error)),
-                  );
-                }}
+                data-testid="save-snippet-button"
+                onClick={openSnippetDialog}
               >
                 <Save className="h-3.5 w-3.5" />
                 Save
@@ -2715,6 +2734,72 @@ function App() {
           </>
         )}
       </main>
+
+      {/* ── Save Snippet Dialog ── */}
+      <Dialog
+        open={snippetDialogOpen}
+        onOpenChange={(open) => {
+          if (savingSnippet) return;
+          setSnippetDialogOpen(open);
+          if (!open) {
+            setSnippetName("");
+          }
+        }}
+      >
+        <DialogContent
+          data-testid="snippet-save-dialog"
+          className="border-border/60 sm:max-w-[420px]"
+        >
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveSnippet();
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Save snippet</DialogTitle>
+              <DialogDescription>
+                Store the current SQL query in snippets for quick reuse.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-1.5">
+              <label
+                htmlFor="snippet-name"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                Snippet name
+              </label>
+              <Input
+                id="snippet-name"
+                value={snippetName}
+                placeholder="e.g. Recent failed jobs"
+                autoFocus
+                onChange={(event) => setSnippetName(event.currentTarget.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSnippetDialogOpen(false)}
+                disabled={savingSnippet}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={savingSnippet || !snippetName.trim()}
+              >
+                {savingSnippet ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                Save
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Operations Dialog ── */}
       <Dialog

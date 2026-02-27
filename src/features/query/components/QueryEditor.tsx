@@ -22,7 +22,8 @@ type QueryEditorProps = {
 const queryEditorTheme = EditorView.theme(
   {
     "&": {
-      backgroundColor: "transparent",
+      backgroundColor: "hsl(var(--card) / 0.92)",
+      color: "hsl(var(--foreground))",
       fontSize: "0.875rem",
     },
     ".cm-scroller": {
@@ -32,6 +33,7 @@ const queryEditorTheme = EditorView.theme(
     },
     ".cm-content": {
       padding: "0.5rem 0.625rem",
+      caretColor: "hsl(var(--primary))",
     },
     ".cm-gutters": {
       display: "none",
@@ -40,7 +42,16 @@ const queryEditorTheme = EditorView.theme(
       outline: "none",
     },
     ".cm-activeLine": {
-      backgroundColor: "transparent",
+      backgroundColor: "hsl(var(--muted) / 0.32)",
+    },
+    ".cm-selectionBackground, .cm-content ::selection": {
+      backgroundColor: "hsl(var(--primary) / 0.24)",
+    },
+    ".cm-cursor, .cm-dropCursor": {
+      borderLeftColor: "hsl(var(--primary))",
+    },
+    ".cm-placeholder": {
+      color: "hsl(var(--muted-foreground))",
     },
     ".cm-tooltip-autocomplete": {
       borderRadius: "0.5rem",
@@ -107,11 +118,12 @@ export function QueryEditor({
   return (
     <div
       data-testid="sql-editor"
-      className="overflow-hidden rounded-md border border-border/40 bg-background/50"
+      className="overflow-hidden rounded-md border border-border/40 bg-card/90"
     >
       <CodeMirror
         value={value}
         onChange={onChange}
+        theme="dark"
         extensions={extensions}
         className="mono text-sm"
         basicSetup={{
