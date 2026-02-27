@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { check } from "@tauri-apps/plugin-updater";
 import { confirm, open, save } from "@tauri-apps/plugin-dialog";
 import {
@@ -73,6 +80,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 type SchemaTable = { database: string; name: string; engine: string };
 type SchemaColumn = { name: string; type: string };
+type ResultRow = Record<string, unknown>;
 
 type EditingCell = {
   rowIdx: number;
@@ -307,8 +315,6 @@ function App() {
   const [selectedRowIdx, setSelectedRowIdx] = useState<number | null>(null);
   const savePendingRef = useRef(false);
   const resultContainerRef = useRef<HTMLDivElement | null>(null);
-  const [resultScrollTop, setResultScrollTop] = useState(0);
-  const [resultViewportHeight, setResultViewportHeight] = useState(600);
 
   /* ── Pending changes (confirmation layer) ── */
   const [pendingDeletes, setPendingDeletes] = useState<Set<number>>(
@@ -361,23 +367,35 @@ function App() {
       );
     });
   }, [databases, tablesByDb, normalizedSchemaFilter]);
-  const resultRows = activeTab?.result?.rows ?? [];
-  const rowHeightPx = 30;
-  const shouldVirtualize = resultRows.length > 300;
-  const visibleWindow = Math.max(
-    1,
-    Math.ceil(resultViewportHeight / rowHeightPx),
+  const resultData = activeTab?.result?.rows ?? [];
+  const resultColumns = useMemo<ColumnDef<ResultRow>[]>(
+    () =>
+      (activeTab?.result?.columns ?? []).map((column) => ({
+        id: column,
+        accessorKey: column,
+        header: column,
+      })),
+    [activeTab?.result?.columns],
   );
-  const overscan = 10;
-  const virtualStart = shouldVirtualize
-    ? Math.max(0, Math.floor(resultScrollTop / rowHeightPx) - overscan)
-    : 0;
-  const virtualEnd = shouldVirtualize
-    ? Math.min(resultRows.length, virtualStart + visibleWindow + overscan * 2)
-    : resultRows.length;
-  const visibleRows = shouldVirtualize
-    ? resultRows.slice(virtualStart, virtualEnd)
-    : resultRows;
+  const resultTable = useReactTable<ResultRow>({
+    data: resultData,
+    columns: resultColumns,
+    getCoreRowModel: getCoreRowModel(),
+  });
+  const resultTableRows = resultTable.getRowModel().rows;
+  const rowHeightPx = 30;
+  const rowVirtualizer = useVirtualizer({
+    count: resultTableRows.length,
+    getScrollElement: () => resultContainerRef.current,
+    estimateSize: () => rowHeightPx,
+    overscan: 10,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const virtualPaddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const virtualPaddingBottom =
+    virtualRows.length > 0
+      ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
+      : 0;
   const queryCompletionTables = useMemo(
     () =>
       Object.values(tablesByDb).flatMap((tables) =>
@@ -590,16 +608,6 @@ function App() {
   }, [tabs, activeTabId]);
 
   useEffect(() => {
-    const el = resultContainerRef.current;
-    if (!el) return;
-    const measure = () => setResultViewportHeight(el.clientHeight || 600);
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [activeTabId, activeConnectionId]);
-
-  useEffect(() => {
-    setResultScrollTop(0);
     if (resultContainerRef.current) {
       resultContainerRef.current.scrollTop = 0;
     }
@@ -2369,9 +2377,6 @@ function App() {
               <div
                 ref={resultContainerRef}
                 className="flex-1 overflow-auto"
-                onScroll={(e) => {
-                  setResultScrollTop(e.currentTarget.scrollTop);
-                }}
               >
                 {activeTab?.running ? (
                   <div className="p-3">
@@ -2388,36 +2393,44 @@ function App() {
                 ) : activeTab?.result?.columns?.length ? (
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        {activeTab.result.columns.map((col) => (
-                          <TableHead
-                            key={col}
-                            className="sticky top-0 z-10 whitespace-nowrap bg-muted/40 text-xs font-medium backdrop-blur-sm"
-                          >
-                            {col}
-                          </TableHead>
-                        ))}
-                      </TableRow>
+                      {resultTable.getHeaderGroups().map((headerGroup) => (
+                        <TableRow key={headerGroup.id}>
+                          {headerGroup.headers.map((header) => (
+                            <TableHead
+                              key={header.id}
+                              className="sticky top-0 z-10 whitespace-nowrap bg-muted/40 text-xs font-medium backdrop-blur-sm"
+                            >
+                              {header.isPlaceholder
+                                ? null
+                                : flexRender(
+                                    header.column.columnDef.header,
+                                    header.getContext(),
+                                  )}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      ))}
                     </TableHeader>
                     <TableBody>
-                      {shouldVirtualize && virtualStart > 0 ? (
+                      {virtualPaddingTop > 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={activeTab.result.columns.length}
-                            style={{ height: virtualStart * rowHeightPx }}
+                            colSpan={resultTable.getAllLeafColumns().length}
+                            style={{ height: virtualPaddingTop }}
                           />
                         </TableRow>
                       ) : null}
-                      {visibleRows.map((row, localIdx) => {
-                        const idx = shouldVirtualize
-                          ? virtualStart + localIdx
-                          : localIdx;
+                      {virtualRows.map((virtualRow) => {
+                        const row = resultTableRows[virtualRow.index];
+                        if (!row) return null;
+                        const idx = row.index;
                         const isPendingDelete = pendingDeletes.has(idx);
                         return (
                           <TableRow
-                            key={idx}
+                            key={row.id}
                             role="button"
                             tabIndex={0}
+                            style={{ height: virtualRow.size }}
                             className={cn(
                               "cursor-pointer transition-colors",
                               isPendingDelete
@@ -2440,12 +2453,14 @@ function App() {
                               }
                             }}
                           >
-                            {activeTab.result!.columns.map((col) => {
+                            {row.getVisibleCells().map((cell) => {
+                              const col = String(cell.column.id);
                               const cellKey = `${idx}:${col}`;
                               const pendingEdit = pendingEdits.get(cellKey);
                               const isEditing =
                                 editingCell?.rowIdx === idx &&
                                 editingCell?.col === col;
+                              const cellValue = row.original[col];
 
                               // Show pending value if it exists, otherwise original
                               const displayValue =
@@ -2455,9 +2470,9 @@ function App() {
                                     : typeof pendingEdit.newValue === "object"
                                       ? JSON.stringify(pendingEdit.newValue)
                                       : String(pendingEdit.newValue)
-                                  : typeof row[col] === "object"
-                                    ? JSON.stringify(row[col])
-                                    : String(row[col] ?? "");
+                                  : typeof cellValue === "object"
+                                    ? JSON.stringify(cellValue)
+                                    : String(cellValue ?? "");
 
                               return (
                                 <TableCell
@@ -2532,14 +2547,11 @@ function App() {
                           </TableRow>
                         );
                       })}
-                      {shouldVirtualize && virtualEnd < resultRows.length ? (
+                      {virtualPaddingBottom > 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={activeTab.result.columns.length}
-                            style={{
-                              height:
-                                (resultRows.length - virtualEnd) * rowHeightPx,
-                            }}
+                            colSpan={resultTable.getAllLeafColumns().length}
+                            style={{ height: virtualPaddingBottom }}
                           />
                         </TableRow>
                       ) : null}
