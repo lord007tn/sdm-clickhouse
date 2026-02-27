@@ -91,6 +91,14 @@ type PendingEdit = {
   newValue: unknown;
 };
 
+type ConnectionHealthState = "checking" | "ok" | "error";
+
+type ConnectionHealth = {
+  state: ConnectionHealthState;
+  detail?: string;
+  latencyMs?: number;
+};
+
 type GithubUpdateInfo = {
   version: string;
   assetName: string;
@@ -247,6 +255,9 @@ function App() {
   /* ── Core state ── */
   const [connections, setConnections] = useState<ConnectionProfile[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(true);
+  const [connectionHealthById, setConnectionHealthById] = useState<
+    Record<string, ConnectionHealth>
+  >({});
   const [activeConnectionId, setActiveConnectionId] = useState<string>();
   const [databases, setDatabases] = useState<string[]>([]);
   const [expandedDb, setExpandedDb] = useState<Record<string, boolean>>({});
@@ -398,16 +409,96 @@ function App() {
     : resultRows;
 
   /* ── Data loading ── */
+  const refreshConnectionHealth = useCallback(
+    async (profiles: ConnectionProfile[]) => {
+      if (!isTauriRuntime) return;
+      if (profiles.length === 0) {
+        setConnectionHealthById({});
+        return;
+      }
+
+      setConnectionHealthById((prev) => {
+        const next: Record<string, ConnectionHealth> = { ...prev };
+        profiles.forEach((profile) => {
+          next[profile.id] = { state: "checking" };
+        });
+        return next;
+      });
+
+      const results = await Promise.all(
+        profiles.map(async (profile) => {
+          const payload: ConnectionInput = {
+            id: profile.id,
+            name: profile.name,
+            host: profile.host,
+            port: profile.port,
+            database: profile.database,
+            username: profile.username,
+            secure: profile.secure,
+            tlsInsecureSkipVerify: profile.tlsInsecureSkipVerify,
+            caCertPath: profile.caCertPath ?? "",
+            sshTunnel: profile.sshTunnel ?? {
+              enabled: false,
+              host: "",
+              port: 22,
+              username: "",
+              localPort: 8123,
+            },
+            timeoutMs: profile.timeoutMs,
+          };
+          try {
+            const diagnostics = await api.connectionDiagnostics(payload);
+            return {
+              id: profile.id,
+              health: diagnostics.ok
+                ? ({
+                    state: "ok",
+                    detail: diagnostics.serverVersion
+                      ? `Connected · version=${diagnostics.serverVersion}`
+                      : "Connected",
+                    latencyMs: diagnostics.latencyMs,
+                  } satisfies ConnectionHealth)
+                : ({
+                    state: "error",
+                    detail: diagnostics.detail,
+                    latencyMs: diagnostics.latencyMs,
+                  } satisfies ConnectionHealth),
+            };
+          } catch (error) {
+            return {
+              id: profile.id,
+              health: {
+                state: "error",
+                detail: String(error),
+              } satisfies ConnectionHealth,
+            };
+          }
+        }),
+      );
+
+      setConnectionHealthById((prev) => {
+        const next: Record<string, ConnectionHealth> = {};
+        profiles.forEach((profile) => {
+          const resolved = results.find((result) => result.id === profile.id);
+          next[profile.id] = resolved?.health ?? prev[profile.id] ?? { state: "error" };
+        });
+        return next;
+      });
+    },
+    [isTauriRuntime],
+  );
+
   const loadConnections = useCallback(async () => {
     setConnectionsLoading(true);
     try {
       const rows = await api.connectionList();
       setConnections(rows);
       setActiveConnectionId((current) => current ?? rows[0]?.id);
+      void refreshConnectionHealth(rows);
     } finally {
       setConnectionsLoading(false);
     }
-  }, []);
+  }, [refreshConnectionHealth]);
 
   const loadWorkspace = useCallback(async () => {
     if (!activeConnectionId) return;
@@ -461,6 +552,14 @@ function App() {
     if (!activeConnectionId) return;
     void loadWorkspace().catch((error) => toast.error(String(error)));
   }, [activeConnectionId, loadWorkspace]);
+
+  useEffect(() => {
+    if (!isTauriRuntime || connections.length === 0) return;
+    const timer = window.setInterval(() => {
+      void refreshConnectionHealth(connections);
+    }, 45_000);
+    return () => window.clearInterval(timer);
+  }, [connections, isTauriRuntime, refreshConnectionHealth]);
 
   useEffect(() => {
     setSelectedTable(null);
@@ -1384,39 +1483,47 @@ function App() {
                   </Button>
                 </div>
               ) : (
-                connections.map((connection) => (
-                  <div
-                    key={connection.id}
-                    role="button"
-                    tabIndex={0}
-                    className={cn(
-                      "group flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors",
-                      activeConnectionId === connection.id
-                        ? "bg-primary/10"
-                        : "hover:bg-muted/50",
-                    )}
-                    onClick={() => setActiveConnectionId(connection.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setActiveConnectionId(connection.id);
-                      }
-                    }}
-                  >
+                connections.map((connection) => {
+                  const health = connectionHealthById[connection.id];
+                  return (
+                    <div
+                      key={connection.id}
+                      role="button"
+                      tabIndex={0}
+                      className={cn(
+                        "group flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors",
+                        health?.state === "error"
+                          ? "border border-destructive/30 bg-destructive/5 hover:bg-destructive/10"
+                          : activeConnectionId === connection.id
+                            ? "bg-primary/10"
+                            : "hover:bg-muted/50",
+                      )}
+                      onClick={() => setActiveConnectionId(connection.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setActiveConnectionId(connection.id);
+                        }
+                      }}
+                    >
                     <div
                       className={cn(
                         "flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md",
-                        activeConnectionId === connection.id
-                          ? "bg-primary/20"
-                          : "bg-muted/50",
+                        health?.state === "error"
+                          ? "bg-destructive/15"
+                          : activeConnectionId === connection.id
+                            ? "bg-primary/20"
+                            : "bg-muted/50",
                       )}
                     >
                       <Server
                         className={cn(
                           "h-3.5 w-3.5",
-                          activeConnectionId === connection.id
-                            ? "text-primary"
-                            : "text-muted-foreground",
+                          health?.state === "error"
+                            ? "text-destructive"
+                            : activeConnectionId === connection.id
+                              ? "text-primary"
+                              : "text-muted-foreground",
                         )}
                       />
                     </div>
@@ -1433,6 +1540,27 @@ function App() {
                       </div>
                       <div className="truncate text-[10px] text-muted-foreground">
                         {connection.host}:{connection.port}
+                      </div>
+                      <div
+                        className={cn(
+                          "truncate text-[10px]",
+                          health?.state === "ok" && "text-emerald-300",
+                          health?.state === "checking" && "text-amber-300",
+                          health?.state === "error" && "text-destructive",
+                        )}
+                        title={health?.detail}
+                      >
+                        {health?.state === "ok"
+                          ? `Online${
+                              health.latencyMs !== undefined
+                                ? ` · ${health.latencyMs}ms`
+                                : ""
+                            }`
+                          : health?.state === "checking"
+                            ? "Checking..."
+                            : health?.state === "error"
+                              ? "Offline"
+                              : "Status unknown"}
                       </div>
                     </div>
                     <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
@@ -1460,7 +1588,8 @@ function App() {
                       </button>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </ScrollArea>
