@@ -9,3 +9,65 @@ test("renders browser preview shell", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByText("Simple SDM")).toBeVisible();
 });
+
+test("renders query workspace with mocked tauri bridge and codemirror editor", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const fakeConnection = {
+      id: "conn-1",
+      name: "Local ClickHouse",
+      host: "localhost",
+      port: 8123,
+      database: "default",
+      username: "default",
+      secure: false,
+      tlsInsecureSkipVerify: false,
+      caCertPath: "",
+      sshTunnel: {
+        enabled: false,
+        host: "",
+        port: 22,
+        username: "",
+        localPort: 8123,
+      },
+      timeoutMs: 30_000,
+    };
+
+    const invoke = async (cmd: string) => {
+      switch (cmd) {
+        case "connection_list":
+          return [fakeConnection];
+        case "connection_diagnostics":
+          return { ok: true, category: "network", detail: "ok", latencyMs: 1 };
+        case "schema_list_databases":
+          return [{ name: "default" }];
+        case "history_list":
+        case "snippet_list":
+        case "audit_list":
+        case "logs_list":
+          return [];
+        case "app_startup_status":
+          return null;
+        default:
+          return null;
+      }
+    };
+
+    Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      value: { invoke },
+      configurable: true,
+    });
+  });
+
+  await page.goto("/");
+
+  const sqlEditor = page.getByTestId("sql-editor");
+  await expect(sqlEditor).toBeVisible();
+  await expect(
+    sqlEditor.locator('[contenteditable="true"][role="textbox"]'),
+  ).toBeVisible();
+  await expect(
+    page.locator('textarea[placeholder="Write your SQL query here..."]'),
+  ).toHaveCount(0);
+});
