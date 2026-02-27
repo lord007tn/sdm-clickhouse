@@ -1,7 +1,7 @@
 {
   "name": "sdm-clickhouse",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.1.6",
   "packageManager": "pnpm@10.20.0",
   "type": "module",
   "scripts": {

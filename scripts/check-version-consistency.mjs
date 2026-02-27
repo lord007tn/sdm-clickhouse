@@ -41,9 +41,15 @@ if (uniqueVersions.size !== 1) {
   );
 }
 
-const rawTag = process.argv[2] ?? process.env.GITHUB_REF_NAME ?? "";
-const normalizedTag = rawTag.trim();
+const cliRef = (process.argv[2] ?? "").trim();
+const envRefName = (process.env.GITHUB_REF_NAME ?? "").trim();
+const envRefType = (process.env.GITHUB_REF_TYPE ?? "").trim().toLowerCase();
+
+const normalizedTag = cliRef || (envRefType === "tag" ? envRefName : "");
 if (normalizedTag) {
+  if (!normalizedTag.startsWith("v")) {
+    fail(`tag ${normalizedTag} must start with 'v'`);
+  }
   const expectedTag = `v${packageJsonVersion}`;
   if (normalizedTag !== expectedTag) {
     fail(`tag ${normalizedTag} does not match manifest version ${expectedTag}`);

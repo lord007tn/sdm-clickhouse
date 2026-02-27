@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.6] - 2026-02-27
+
+### Added
+
+- Portable distribution support:
+  - Windows portable ZIP release artifact
+  - Installer portable mode (`--portable` / `-Portable`)
+  - In-app updater portable preference via environment flags
+
+### Changed
+
+- Project identity and repository naming standardized to `sdm-clickhouse`.
+- Version consistency check now validates tag/version only on tag builds (or explicit CLI tag), not branch refs like `main`.
+
 ## [0.1.5] - 2026-02-27
 
 ### Fixed
@@ -91,3 +105,4 @@ All notable changes to this project are documented in this file.
 [0.1.3]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.3
 [0.1.4]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.4
 [0.1.5]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.5
+[0.1.6]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.6
