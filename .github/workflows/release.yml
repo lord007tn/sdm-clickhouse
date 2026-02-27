@@ -143,6 +143,55 @@ jobs:
           updaterJsonPreferNsis: true
           args: --bundles ${{ matrix.bundles }}
 
+      - name: Package Windows portable ZIP
+        if: matrix.platform == 'windows'
+        id: package_windows_portable
+        shell: pwsh
+        run: |
+          $arch = "${{ runner.arch }}".ToLowerInvariant()
+          $tag = "${{ github.ref_name }}"
+          $portableName = "sdm-clickhouse_${tag}_${arch}_portable.zip"
+          $portableDir = Join-Path $env:RUNNER_TEMP "sdm-clickhouse-portable"
+          New-Item -ItemType Directory -Path $portableDir -Force | Out-Null
+
+          $preferred = @(
+            "src-tauri/target/release/sdm-clickhouse.exe",
+            "src-tauri/target/release/tauri-app.exe"
+          )
+          $binary = $preferred | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $binary) {
+            $candidate = Get-ChildItem -Path "src-tauri/target/release" -Filter "*.exe" -File |
+              Where-Object { $_.Name -notmatch "(?i)(setup|uninstall|updater|crash)" } |
+              Sort-Object Length -Descending |
+              Select-Object -First 1
+            if ($null -ne $candidate) {
+              $binary = $candidate.FullName
+            }
+          }
+
+          if (-not $binary) {
+            throw "Could not find the Windows release executable to package."
+          }
+
+          Copy-Item -Path $binary -Destination (Join-Path $portableDir "sdm-clickhouse.exe") -Force
+          $zipPath = Join-Path $env:RUNNER_TEMP $portableName
+          if (Test-Path $zipPath) {
+            Remove-Item -Path $zipPath -Force
+          }
+          Compress-Archive -Path (Join-Path $portableDir "*") -DestinationPath $zipPath -Force
+
+          "zip_path=$zipPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "zip_name=$portableName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload Windows portable ZIP
+        if: matrix.platform == 'windows'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: ${{ steps.package_windows_portable.outputs.zip_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   verify-updater-manifest:
     name: Verify latest.json
     needs: publish-tauri

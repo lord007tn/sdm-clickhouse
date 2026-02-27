@@ -9,6 +9,7 @@
 5. `cargo check` (in `src-tauri`)
 6. Smoke test: connection create/test/query/cancel
 7. Verify audit/logs tabs capture expected operations
+8. Verify installer portable mode (`SDM_CLICKHOUSE_PORTABLE=1`) resolves portable assets per OS
 
 ## 2. Repository Automation Setup
 
@@ -38,20 +39,25 @@
 
 1. Run `pnpm tauri build`
 2. Sign MSI/NSIS artifacts
-3. Install + upgrade test from previous version
+3. Verify portable ZIP asset is uploaded (`sdm-clickhouse_<tag>_<arch>_portable.zip`)
+4. Install + upgrade test from previous version
+5. Extract and run portable ZIP smoke test
 
 ## 6. macOS
 
 1. Build on macOS runner
 2. Sign app bundle with Apple Developer cert
 3. Notarize and staple
-4. Install + upgrade test
+4. Verify `*.app.tar.gz` portable bundle artifact exists on release
+5. Install + upgrade test
+6. Portable app bundle extract/copy smoke test (`~/Applications` and `/Applications` for system mode)
 
 ## 7. Linux
 
 1. Build target packages (`AppImage`, `deb`, `rpm` as needed)
 2. Sign package metadata/artifacts where applicable
 3. Install + upgrade test on target distros
+4. Verify AppImage portable flow
 
 ## 8. Rollback Readiness
 

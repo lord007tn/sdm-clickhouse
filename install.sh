@@ -5,6 +5,7 @@ REPO="${SDM_CLICKHOUSE_REPO:-lord007tn/sdm-clickhouse}"
 VERSION="${SDM_CLICKHOUSE_VERSION:-latest}"
 CHECK_ONLY=0
 SYSTEM_INSTALL="${SDM_CLICKHOUSE_SYSTEM_INSTALL:-0}"
+PORTABLE_MODE="${SDM_CLICKHOUSE_PORTABLE:-0}"
 GITHUB_TOKEN_VALUE="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 
 usage() {
@@ -12,13 +13,14 @@ usage() {
 SDM ClickHouse installer
 
 Usage:
-  install.sh [--version <version>] [--repo <owner/repo>] [--check] [--system]
+  install.sh [--version <version>] [--repo <owner/repo>] [--check] [--system] [--portable]
 
 Environment:
   SDM_CLICKHOUSE_VERSION=<version|latest>
   SDM_CLICKHOUSE_REPO=<owner/repo>
   SDM_CLICKHOUSE_APPIMAGE_DIR=<dir>   # default: ~/.local/bin
   SDM_CLICKHOUSE_SYSTEM_INSTALL=1      # optional, use system-level install paths
+  SDM_CLICKHOUSE_PORTABLE=1            # optional, prefer portable assets
   GITHUB_TOKEN / GH_TOKEN          # optional, needed for private repos
 USAGE
 }
@@ -39,6 +41,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --system)
       SYSTEM_INSTALL=1
+      shift
+      ;;
+    --portable)
+      PORTABLE_MODE=1
       shift
       ;;
     -h|--help)
@@ -115,12 +121,13 @@ fi
 echo "Resolving release metadata from ${RELEASE_URL}"
 RELEASE_JSON="$(curl -fsSL "${API_HEADERS[@]}" "$RELEASE_URL")"
 
-SELECTION="$(printf '%s' "$RELEASE_JSON" | python3 - "$OS_NAME" "$ARCH_NAME" <<'PY'
+SELECTION="$(printf '%s' "$RELEASE_JSON" | python3 - "$OS_NAME" "$ARCH_NAME" "$PORTABLE_MODE" <<'PY'
 import json
 import sys
 
 os_name = sys.argv[1]
 arch = sys.argv[2]
+prefer_portable = sys.argv[3] == "1"
 data = json.load(sys.stdin)
 releases = data if isinstance(data, list) else [data]
 
@@ -133,6 +140,18 @@ def pick_asset(assets):
         return None
 
     if os_name == "linux":
+        if prefer_portable:
+            if arch == "arm64":
+                return (
+                    find(lambda n: n.endswith(".appimage") and "aarch64" in n)
+                    or find(lambda n: n.endswith(".appimage") and "arm64" in n)
+                    or find(lambda n: n.endswith(".appimage"))
+                )
+            return (
+                find(lambda n: n.endswith(".appimage") and "amd64" in n)
+                or find(lambda n: n.endswith(".appimage") and "x64" in n)
+                or find(lambda n: n.endswith(".appimage"))
+            )
         if arch == "arm64":
             return (
                 find(lambda n: n.endswith(".appimage") and "aarch64" in n)
@@ -148,6 +167,16 @@ def pick_asset(assets):
         )
 
     if os_name == "macos":
+        if prefer_portable:
+            if arch == "arm64":
+                return (
+                    find(lambda n: n.endswith(".app.tar.gz") and ("aarch64" in n or "arm64" in n))
+                    or find(lambda n: n.endswith(".app.tar.gz"))
+                )
+            return (
+                find(lambda n: n.endswith(".app.tar.gz") and ("x64" in n or "amd64" in n))
+                or find(lambda n: n.endswith(".app.tar.gz"))
+            )
         if arch == "arm64":
             return find(lambda n: n.endswith("_aarch64.dmg"))
         return (
@@ -264,7 +293,47 @@ install_linux() {
 
 install_macos() {
   local file="$1"
-  local mount_dir app_path
+  local name_lower app_path
+  name_lower="$(echo "$ASSET_NAME" | tr '[:upper:]' '[:lower:]')"
+
+  copy_macos_app() {
+    local source_app="$1"
+    local app_dest
+    if [[ "$SYSTEM_INSTALL" == "1" ]]; then
+      app_dest="/Applications"
+      if [[ ! -w "$app_dest" ]]; then
+        if command -v sudo >/dev/null 2>&1; then
+          sudo cp -R "$source_app" "$app_dest/"
+        else
+          echo "Write permission to /Applications denied and sudo is unavailable." >&2
+          return 1
+        fi
+        echo "Installed $(basename "$source_app") into /Applications"
+        return 0
+      fi
+    else
+      app_dest="${HOME}/Applications"
+      mkdir -p "$app_dest"
+    fi
+    cp -R "$source_app" "$app_dest/"
+    echo "Installed $(basename "$source_app") into ${app_dest}"
+    return 0
+  }
+
+  if [[ "$name_lower" == *.app.tar.gz ]]; then
+    local extract_dir="${TMP_DIR}/macos-portable-app"
+    mkdir -p "$extract_dir"
+    tar -xzf "$file" -C "$extract_dir"
+    app_path="$(find "$extract_dir" -name '*.app' -type d | head -n 1)"
+    if [[ -z "$app_path" ]]; then
+      echo "No .app found in portable archive." >&2
+      exit 1
+    fi
+    copy_macos_app "$app_path" || exit 1
+    return
+  fi
+
+  local mount_dir
   mount_dir="$(hdiutil attach "$file" -nobrowse -quiet | awk '/\/Volumes\// {print $3; exit}')"
   if [[ -z "$mount_dir" ]]; then
     echo "Failed to mount DMG." >&2
@@ -276,28 +345,11 @@ install_macos() {
     echo "No .app found in DMG." >&2
     exit 1
   fi
-  local app_dest
-  if [[ "$SYSTEM_INSTALL" == "1" ]]; then
-    app_dest="/Applications"
-    if [[ ! -w "$app_dest" ]]; then
-      if command -v sudo >/dev/null 2>&1; then
-        sudo cp -R "$app_path" "$app_dest/"
-      else
-        echo "Write permission to /Applications denied and sudo is unavailable." >&2
-        hdiutil detach "$mount_dir" -quiet || true
-        exit 1
-      fi
-      hdiutil detach "$mount_dir" -quiet || true
-      echo "Installed $(basename "$app_path") into /Applications"
-      return
-    fi
-  else
-    app_dest="${HOME}/Applications"
-    mkdir -p "$app_dest"
+  if ! copy_macos_app "$app_path"; then
+    hdiutil detach "$mount_dir" -quiet || true
+    exit 1
   fi
-  cp -R "$app_path" "$app_dest/"
   hdiutil detach "$mount_dir" -quiet || true
-  echo "Installed $(basename "$app_path") into ${app_dest}"
 }
 
 case "$OS_NAME" in

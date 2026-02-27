@@ -346,6 +346,19 @@ fn github_token() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_ascii_lowercase())
+        .map(|value| matches!(value.as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
+fn updater_prefers_portable() -> bool {
+    env_flag_enabled("SDM_CLICKHOUSE_UPDATER_PORTABLE")
+        || env_flag_enabled("SDM_CLICKHOUSE_PORTABLE")
+}
+
 fn github_api_request(url: &str) -> reqwest::RequestBuilder {
     let client = reqwest::Client::new();
     let mut request = client
@@ -401,6 +414,7 @@ fn select_release_for_target<'a>(
     current_version: &str,
     os: &str,
     arch: &str,
+    prefer_portable: bool,
 ) -> Option<(&'a GithubRelease, &'a GithubReleaseAsset, String, String)> {
     releases.iter().find_map(|release| {
         if release.draft || release.prerelease {
@@ -410,7 +424,7 @@ fn select_release_for_target<'a>(
         if latest_version.is_empty() || !is_newer_version(&latest_version, current_version) {
             return None;
         }
-        let asset = select_asset_for_target(&release.assets, os, arch)?;
+        let asset = select_asset_for_target(&release.assets, os, arch, prefer_portable)?;
         let sha256 = release_sha256(asset)?;
         Some((release, asset, latest_version, sha256))
     })
@@ -420,6 +434,7 @@ fn select_asset_for_target<'a>(
     assets: &'a [GithubReleaseAsset],
     os: &str,
     arch: &str,
+    prefer_portable: bool,
 ) -> Option<&'a GithubReleaseAsset> {
     let find = |predicate: fn(&str) -> bool| {
         assets
@@ -428,6 +443,26 @@ fn select_asset_for_target<'a>(
     };
 
     if os == "windows" {
+        if prefer_portable {
+            if arch == "arm64" {
+                if let Some(asset) = find(|name| {
+                    name.ends_with(".zip")
+                        && name.contains("portable")
+                        && (name.contains("arm64") || name.contains("aarch64"))
+                }) {
+                    return Some(asset);
+                }
+            } else if let Some(asset) = find(|name| {
+                name.ends_with(".zip")
+                    && name.contains("portable")
+                    && (name.contains("x64") || name.contains("amd64"))
+            }) {
+                return Some(asset);
+            }
+            if let Some(asset) = find(|name| name.ends_with(".zip") && name.contains("portable")) {
+                return Some(asset);
+            }
+        }
         if arch == "arm64" {
             return find(|name| name.ends_with(".exe") && name.contains("arm64"))
                 .or_else(|| find(|name| name.ends_with(".msi") && name.contains("arm64")));
@@ -440,6 +475,26 @@ fn select_asset_for_target<'a>(
     }
 
     if os == "linux" {
+        if prefer_portable {
+            if arch == "arm64" {
+                if let Some(asset) = find(|name| name.ends_with(".appimage") && name.contains("aarch64")) {
+                    return Some(asset);
+                }
+                if let Some(asset) = find(|name| name.ends_with(".appimage") && name.contains("arm64")) {
+                    return Some(asset);
+                }
+            } else {
+                if let Some(asset) = find(|name| name.ends_with(".appimage") && name.contains("amd64")) {
+                    return Some(asset);
+                }
+                if let Some(asset) = find(|name| name.ends_with(".appimage") && name.contains("x64")) {
+                    return Some(asset);
+                }
+            }
+            if let Some(asset) = find(|name| name.ends_with(".appimage")) {
+                return Some(asset);
+            }
+        }
         if arch == "arm64" {
             return find(|name| name.ends_with(".appimage") && name.contains("aarch64"))
                 .or_else(|| find(|name| name.ends_with(".appimage")))
@@ -453,6 +508,24 @@ fn select_asset_for_target<'a>(
     }
 
     if os == "macos" {
+        if prefer_portable {
+            if arch == "arm64" {
+                if let Some(asset) = find(|name| {
+                    name.ends_with(".app.tar.gz")
+                        && (name.contains("aarch64") || name.contains("arm64"))
+                }) {
+                    return Some(asset);
+                }
+            } else if let Some(asset) = find(|name| {
+                name.ends_with(".app.tar.gz")
+                    && (name.contains("x64") || name.contains("amd64"))
+            }) {
+                return Some(asset);
+            }
+            if let Some(asset) = find(|name| name.ends_with(".app.tar.gz")) {
+                return Some(asset);
+            }
+        }
         if arch == "arm64" {
             return find(|name| name.ends_with("_aarch64.dmg"));
         }
@@ -1379,6 +1452,7 @@ pub fn app_request_restart(app: tauri::AppHandle) -> Result<CommandMessage, Stri
 pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheckResult, String> {
     let current_version = env!("CARGO_PKG_VERSION").to_string();
     let (os, arch, target) = runtime_target();
+    let prefer_portable = updater_prefers_portable();
     if os == "unknown" || arch == "unknown" {
         return Ok(UpdateCheckResult {
             available: false,
@@ -1394,7 +1468,7 @@ pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheck
     let repo = resolve_updater_repo();
     let releases = fetch_releases(&repo).await?;
     let Some((_release, asset, latest_version, sha256)) =
-        select_release_for_target(&releases, &current_version, os, arch)
+        select_release_for_target(&releases, &current_version, os, arch, prefer_portable)
     else {
         return Ok(UpdateCheckResult {
             available: false,
@@ -1437,9 +1511,118 @@ async fn download_release_asset(download_url: &str) -> Result<Vec<u8>, String> {
         .map_err(|err| err.to_string())
 }
 
-fn launch_installer(installer_path: &Path) -> anyhow::Result<()> {
+#[cfg(target_os = "windows")]
+fn find_windows_portable_executable(root: &Path) -> anyhow::Result<PathBuf> {
+    let mut stack = vec![root.to_path_buf()];
+    let mut fallback: Option<PathBuf> = None;
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let is_exe = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .map(|value| value.eq_ignore_ascii_case("exe"))
+                .unwrap_or(false);
+            if !is_exe {
+                continue;
+            }
+            if fallback.is_none() {
+                fallback = Some(path.clone());
+            }
+            let file_name = path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            if file_name.contains("sdm") && file_name.contains("clickhouse") {
+                return Ok(path);
+            }
+        }
+    }
+    fallback.ok_or_else(|| anyhow::anyhow!("No executable found in portable ZIP asset."))
+}
+
+#[cfg(target_os = "windows")]
+fn launch_windows_portable_zip(zip_path: &Path) -> anyhow::Result<()> {
+    let extract_dir = std::env::temp_dir().join(format!(
+        "sdm-clickhouse-portable-{}",
+        Uuid::new_v4().as_simple()
+    ));
+    fs::create_dir_all(&extract_dir)?;
+    let status = Command::new("powershell")
+        .arg("-NoProfile")
+        .arg("-NonInteractive")
+        .arg("-Command")
+        .arg("Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force")
+        .arg(zip_path)
+        .arg(&extract_dir)
+        .status()?;
+    if !status.success() {
+        anyhow::bail!("Failed to extract portable ZIP update asset.");
+    }
+    let executable = find_windows_portable_executable(&extract_dir)?;
+    Command::new(&executable)
+        .current_dir(executable.parent().unwrap_or(&extract_dir))
+        .spawn()?;
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn find_macos_app_bundle(root: &Path) -> anyhow::Result<PathBuf> {
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir)? {
+            let path = entry?.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let is_app = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .map(|value| value.eq_ignore_ascii_case("app"))
+                .unwrap_or(false);
+            if is_app {
+                return Ok(path);
+            }
+            stack.push(path);
+        }
+    }
+    anyhow::bail!("No .app bundle found in portable macOS update asset.");
+}
+
+#[cfg(target_os = "macos")]
+fn launch_macos_portable_bundle(archive_path: &Path) -> anyhow::Result<()> {
+    let extract_dir = std::env::temp_dir().join(format!(
+        "sdm-clickhouse-portable-{}",
+        Uuid::new_v4().as_simple()
+    ));
+    fs::create_dir_all(&extract_dir)?;
+    let status = Command::new("tar")
+        .arg("-xzf")
+        .arg(archive_path)
+        .arg("-C")
+        .arg(&extract_dir)
+        .status()?;
+    if !status.success() {
+        anyhow::bail!("Failed to extract portable macOS update asset.");
+    }
+    let app_bundle = find_macos_app_bundle(&extract_dir)?;
+    Command::new("open").arg(app_bundle).spawn()?;
+    Ok(())
+}
+
+fn launch_installer(installer_path: &Path, asset_name: &str) -> anyhow::Result<()> {
+    let _ = asset_name;
     #[cfg(target_os = "windows")]
     {
+        let asset_name_lower = asset_name.to_ascii_lowercase();
+        if asset_name_lower.ends_with(".zip") && asset_name_lower.contains("portable") {
+            return launch_windows_portable_zip(installer_path);
+        }
         let ext = installer_path
             .extension()
             .and_then(|value| value.to_str())
@@ -1464,6 +1647,10 @@ fn launch_installer(installer_path: &Path) -> anyhow::Result<()> {
 
     #[cfg(target_os = "macos")]
     {
+        let asset_name_lower = asset_name.to_ascii_lowercase();
+        if asset_name_lower.ends_with(".app.tar.gz") {
+            return launch_macos_portable_bundle(installer_path);
+        }
         Command::new("open").arg(installer_path).spawn()?;
         Ok(())
     }
@@ -1512,6 +1699,7 @@ fn launch_installer(installer_path: &Path) -> anyhow::Result<()> {
 pub async fn app_install_update(_state: State<'_, AppState>) -> Result<CommandMessage, String> {
     let current_version = env!("CARGO_PKG_VERSION").to_string();
     let (os, arch, _) = runtime_target();
+    let prefer_portable = updater_prefers_portable();
     if os == "unknown" || arch == "unknown" {
         return Err("Updater is not available on this runtime target.".to_string());
     }
@@ -1519,7 +1707,7 @@ pub async fn app_install_update(_state: State<'_, AppState>) -> Result<CommandMe
     let repo = resolve_updater_repo();
     let releases = fetch_releases(&repo).await?;
     let Some((_release, asset, _latest_version, sha256)) =
-        select_release_for_target(&releases, &current_version, os, arch)
+        select_release_for_target(&releases, &current_version, os, arch, prefer_portable)
     else {
         return Err("No newer update is available for this runtime target.".to_string());
     };
@@ -1579,7 +1767,7 @@ pub async fn app_install_update(_state: State<'_, AppState>) -> Result<CommandMe
 
     let installer_path = std::env::temp_dir().join(format!("sdm-clickhouse-update-{}", safe_name));
     fs::write(&installer_path, &bytes).map_err(|err| err.to_string())?;
-    launch_installer(&installer_path).map_err(|err| err.to_string())?;
+    launch_installer(&installer_path, asset.name.as_str()).map_err(|err| err.to_string())?;
 
     Ok(CommandMessage {
         message: format!(

@@ -44,6 +44,11 @@ Artifacts are generated under:
   2. Pick the matching release artifact
   3. Verify SHA256 from GitHub release metadata
   4. Run installation
+- Portable mode is available via `--portable` / `-Portable` or `SDM_CLICKHOUSE_PORTABLE=1`.
+- Portable asset preference:
+  1. Windows: `*portable*.zip`
+  2. macOS: `*.app.tar.gz`
+  3. Linux: AppImage (already portable)
 
 ## Cross-Platform Release
 
@@ -64,9 +69,15 @@ Release workflow behavior:
    - `ubuntu-latest` (`deb`, `AppImage`)
    - `windows-latest` (`msi`, `nsis`)
    - `macos-latest` (`dmg`)
-   - no extra desktop package types are emitted
-4. Generate and upload updater manifest `latest.json` via `tauri-action`.
-5. Verify `latest.json` exists on the tagged release.
+4. Package and upload Windows portable ZIP (`sdm-clickhouse_<tag>_<arch>_portable.zip`) to the same tag.
+5. Generate and upload updater manifest `latest.json` via `tauri-action`.
+6. Verify `latest.json` exists on the tagged release.
+
+Portable release outputs:
+
+- Windows portable ZIP from release workflow upload step
+- macOS `*.app.tar.gz` updater bundle (portable app bundle artifact)
+- Linux AppImage
 
 Detailed runbook:
 

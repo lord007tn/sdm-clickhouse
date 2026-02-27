@@ -70,10 +70,20 @@ Default behavior is user-space install without sudo/admin when possible:
 2. Windows prefers setup `.exe` and per-user MSI flags.
 3. macOS installs into `~/Applications`.
 
+Portable mode keeps installs unpacked and prefers portable assets:
+
+1. Linux: AppImage (already portable)
+2. Windows: `*portable*.zip`
+3. macOS: `*.app.tar.gz`
+
+Enable portable mode with `--portable` in `install.sh`, `-Portable` in `install.ps1`, or `SDM_CLICKHOUSE_PORTABLE=1`.
+On Windows portable installs, `SDM_CLICKHOUSE_PORTABLE_DIR` can override the extraction directory.
+
 Use `--system` (or `-SystemInstall` in PowerShell) only when you want system-wide install paths.
 
 If the repository is private, set `GITHUB_TOKEN` (or `GH_TOKEN`) before running installer commands.
 For in-app update checks against a fork/private release source, set `SDM_CLICKHOUSE_UPDATER_REPO` (format: `owner/repo`).
+Set `SDM_CLICKHOUSE_UPDATER_PORTABLE=1` (or `SDM_CLICKHOUSE_PORTABLE=1`) to make in-app updater prefer portable assets.
 
 ## Run (Desktop Dev)
 
@@ -106,7 +116,8 @@ cargo check --manifest-path src-tauri/Cargo.toml
 
 1. Generate release notes with `npx changelogithub@latest`
 2. Build and publish desktop bundles on Linux/Windows/macOS via `tauri-action`
-3. Publish updater manifest `latest.json` to release assets
+3. Publish Windows portable ZIP asset (`sdm-clickhouse_<tag>_<arch>_portable.zip`) on the same tag
+4. Publish updater manifest `latest.json` to release assets
 
 - In-app updater flow checks for updates and uses OS/arch-specific release assets with SHA256 verification before installer launch.
 - Built-in updater path requests app restart automatically after successful install.

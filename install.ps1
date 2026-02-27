@@ -3,6 +3,7 @@ param(
   [string]$Repo = $(if ($env:SDM_CLICKHOUSE_REPO) { $env:SDM_CLICKHOUSE_REPO } else { "lord007tn/sdm-clickhouse" }),
   [string]$GitHubToken = $(if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } elseif ($env:GH_TOKEN) { $env:GH_TOKEN } else { "" }),
   [switch]$SystemInstall,
+  [switch]$Portable,
   [switch]$CheckOnly
 )
 
@@ -23,11 +24,19 @@ function Get-ArchName {
   return "unknown"
 }
 
+function Test-Truthy {
+  param([string]$Value)
+  if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
+  $normalized = $Value.Trim().ToLowerInvariant()
+  return $normalized -in @("1", "true", "yes", "on")
+}
+
 function Select-Asset {
   param(
     [array]$Assets,
     [string]$OsName,
-    [string]$ArchName
+    [string]$ArchName,
+    [bool]$PreferPortable = $false
   )
 
   $withLower = $Assets | ForEach-Object {
@@ -48,6 +57,20 @@ function Select-Asset {
   }
 
   if ($OsName -eq "windows") {
+    if ($PreferPortable) {
+      if ($ArchName -eq "arm64") {
+        $portableAsset = First-Asset @(
+          (Find-Asset { param($n) $n.EndsWith(".zip") -and $n.Contains("portable") -and ($n.Contains("arm64") -or $n.Contains("aarch64")) }),
+          (Find-Asset { param($n) $n.EndsWith(".zip") -and $n.Contains("portable") })
+        )
+      } else {
+        $portableAsset = First-Asset @(
+          (Find-Asset { param($n) $n.EndsWith(".zip") -and $n.Contains("portable") -and ($n.Contains("x64") -or $n.Contains("amd64")) }),
+          (Find-Asset { param($n) $n.EndsWith(".zip") -and $n.Contains("portable") })
+        )
+      }
+      if ($null -ne $portableAsset) { return $portableAsset }
+    }
     if ($ArchName -eq "arm64") {
       return First-Asset @(
         (Find-Asset { param($n) $n.EndsWith(".exe") -and $n.Contains("arm64") }),
@@ -64,6 +87,22 @@ function Select-Asset {
   }
 
   if ($OsName -eq "linux") {
+    if ($PreferPortable) {
+      if ($ArchName -eq "arm64") {
+        $portableAsset = First-Asset @(
+          (Find-Asset { param($n) $n.EndsWith(".appimage") -and $n.Contains("aarch64") }),
+          (Find-Asset { param($n) $n.EndsWith(".appimage") -and $n.Contains("arm64") }),
+          (Find-Asset { param($n) $n.EndsWith(".appimage") })
+        )
+      } else {
+        $portableAsset = First-Asset @(
+          (Find-Asset { param($n) $n.EndsWith(".appimage") -and $n.Contains("amd64") }),
+          (Find-Asset { param($n) $n.EndsWith(".appimage") -and $n.Contains("x64") }),
+          (Find-Asset { param($n) $n.EndsWith(".appimage") })
+        )
+      }
+      if ($null -ne $portableAsset) { return $portableAsset }
+    }
     if ($ArchName -eq "arm64") {
       return First-Asset @(
         (Find-Asset { param($n) $n.EndsWith(".appimage") -and $n.Contains("aarch64") }),
@@ -81,6 +120,20 @@ function Select-Asset {
   }
 
   if ($OsName -eq "macos") {
+    if ($PreferPortable) {
+      if ($ArchName -eq "arm64") {
+        $portableAsset = First-Asset @(
+          (Find-Asset { param($n) $n.EndsWith(".app.tar.gz") -and ($n.Contains("aarch64") -or $n.Contains("arm64")) }),
+          (Find-Asset { param($n) $n.EndsWith(".app.tar.gz") })
+        )
+      } else {
+        $portableAsset = First-Asset @(
+          (Find-Asset { param($n) $n.EndsWith(".app.tar.gz") -and ($n.Contains("x64") -or $n.Contains("amd64")) }),
+          (Find-Asset { param($n) $n.EndsWith(".app.tar.gz") })
+        )
+      }
+      if ($null -ne $portableAsset) { return $portableAsset }
+    }
     if ($ArchName -eq "arm64") {
       return Find-Asset { param($n) $n.EndsWith("_aarch64.dmg") }
     }
@@ -127,12 +180,37 @@ function Install-Asset {
     [string]$Path,
     [string]$AssetName,
     [string]$OsName,
-    [bool]$SystemInstallMode = $false
+    [bool]$SystemInstallMode = $false,
+    [bool]$PortableMode = $false
   )
 
   $lower = $AssetName.ToLowerInvariant()
 
   if ($OsName -eq "windows") {
+    if ($lower.EndsWith(".zip") -and ($PortableMode -or $lower.Contains("portable"))) {
+      $targetDir = if ($env:SDM_CLICKHOUSE_PORTABLE_DIR) {
+        $env:SDM_CLICKHOUSE_PORTABLE_DIR
+      } else {
+        Join-Path $HOME "sdm-clickhouse-portable"
+      }
+      New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+      Expand-Archive -LiteralPath $Path -DestinationPath $targetDir -Force
+
+      $portableExe = Get-ChildItem -Path $targetDir -Filter *.exe -File -Recurse |
+        Where-Object { $_.Name.ToLowerInvariant().Contains("sdm") -and $_.Name.ToLowerInvariant().Contains("clickhouse") } |
+        Select-Object -First 1
+      if ($null -eq $portableExe) {
+        $portableExe = Get-ChildItem -Path $targetDir -Filter *.exe -File -Recurse | Select-Object -First 1
+      }
+
+      Write-Host "Extracted portable package to $targetDir"
+      if ($null -ne $portableExe) {
+        Write-Host "Portable executable: $($portableExe.FullName)"
+      } else {
+        Write-Host "Portable executable not found automatically. Check extracted files in $targetDir"
+      }
+      return
+    }
     if ($lower.EndsWith(".msi")) {
       $args = if ($SystemInstallMode) {
         "/i `"$Path`" /passive /norestart"
@@ -178,6 +256,30 @@ function Install-Asset {
   }
 
   if ($OsName -eq "macos") {
+    if ($lower.EndsWith(".app.tar.gz")) {
+      $extractDir = Join-Path ([System.IO.Path]::GetTempPath()) ("sdm-clickhouse-portable-" + [guid]::NewGuid().ToString("N"))
+      New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+      & tar -xzf $Path -C $extractDir
+      if ($LASTEXITCODE -ne 0) {
+        throw "Failed to extract portable macOS app archive."
+      }
+      $app = Get-ChildItem -Path $extractDir -Filter *.app -Directory -Recurse | Select-Object -First 1
+      if ($null -eq $app) {
+        throw "No .app found in portable archive."
+      }
+      $destination = if ($SystemInstallMode) { "/Applications/" } else { (Join-Path $HOME "Applications") }
+      if (-not (Test-Path $destination)) {
+        New-Item -ItemType Directory -Path $destination -Force | Out-Null
+      }
+      if ($SystemInstallMode -and (Get-Command sudo -ErrorAction SilentlyContinue)) {
+        & sudo cp -R $app.FullName $destination
+      } else {
+        Copy-Item -Recurse -Force -Path $app.FullName -Destination $destination
+      }
+      Write-Host "Installed $($app.Name) into $destination"
+      return
+    }
+
     if (-not $lower.EndsWith(".dmg")) {
       throw "Unsupported macOS asset: $AssetName"
     }
@@ -208,6 +310,7 @@ $archName = Get-ArchName
 if ($osName -eq "unknown") {
   throw "Unsupported operating system."
 }
+$portableMode = $Portable.IsPresent -or (Test-Truthy $env:SDM_CLICKHOUSE_PORTABLE)
 
 $headers = @{ Accept = "application/vnd.github+json" }
 if ($GitHubToken) {
@@ -223,7 +326,7 @@ if ($Version -eq "latest") {
   $candidates = Invoke-GitHubApi -Url $releaseUrl -Headers $headers
   foreach ($candidate in $candidates) {
     if ($candidate.draft -or $candidate.prerelease) { continue }
-    $candidateAsset = Select-Asset -Assets $candidate.assets -OsName $osName -ArchName $archName
+    $candidateAsset = Select-Asset -Assets $candidate.assets -OsName $osName -ArchName $archName -PreferPortable $portableMode
     if ($null -eq $candidateAsset) { continue }
     $candidateDigest = [string]$candidateAsset.digest
     if (-not $candidateDigest.StartsWith("sha256:")) { continue }
@@ -239,7 +342,7 @@ if ($Version -eq "latest") {
   $releaseUrl = "https://api.github.com/repos/$Repo/releases/tags/$tag"
   Write-Host "Resolving release metadata from $releaseUrl"
   $release = Invoke-GitHubApi -Url $releaseUrl -Headers $headers
-  $asset = Select-Asset -Assets $release.assets -OsName $osName -ArchName $archName
+  $asset = Select-Asset -Assets $release.assets -OsName $osName -ArchName $archName -PreferPortable $portableMode
   if ($null -eq $asset) {
     throw "No compatible release asset found for $osName/$archName in tag $tag."
   }
@@ -267,6 +370,6 @@ Invoke-WebRequest -Uri $asset.browser_download_url -Headers $headers -OutFile $t
 Assert-Sha256 -Path $tmpPath -Expected $expectedSha256
 Write-Host "SHA256 verified."
 
-Install-Asset -Path $tmpPath -AssetName $asset.name -OsName $osName -SystemInstallMode $SystemInstall.IsPresent
+Install-Asset -Path $tmpPath -AssetName $asset.name -OsName $osName -SystemInstallMode $SystemInstall.IsPresent -PortableMode $portableMode
 
 Write-Host "SDM ClickHouse installation complete."
