@@ -102,9 +102,28 @@ type ConnectionHealth = {
 type GithubUpdateInfo = {
   version: string;
   assetName: string;
-  downloadUrl: string;
-  sha256: string;
   targetLabel: string;
+};
+
+type OpsAction =
+  | "create-db"
+  | "drop-db"
+  | "create-table"
+  | "drop-table"
+  | "insert"
+  | "update"
+  | "delete";
+
+type OpsDraft = {
+  action: OpsAction;
+  database: string;
+  table: string;
+  columnsDdl: string;
+  engine: string;
+  rowJson: string;
+  whereClause: string;
+  setValuesJson: string;
+  confirmToken: string;
 };
 
 /* ────────────────────────────── Helpers ──────────────────────────── */
@@ -200,6 +219,18 @@ const baseConnection: ConnectionInput = {
   password: "",
 };
 
+const baseOpsDraft: OpsDraft = {
+  action: "create-db",
+  database: "default",
+  table: "",
+  columnsDdl: "id UInt64, ts DateTime",
+  engine: "MergeTree() ORDER BY tuple()",
+  rowJson: '{"id":1}',
+  whereClause: "id = 1",
+  setValuesJson: '{"id":2}',
+  confirmToken: "",
+};
+
 function createTab(index = 1): QueryTab {
   return {
     id: crypto.randomUUID(),
@@ -255,6 +286,7 @@ function App() {
   /* ── Core state ── */
   const [connections, setConnections] = useState<ConnectionProfile[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(true);
+  const [connectionsError, setConnectionsError] = useState<string | null>(null);
   const [connectionHealthById, setConnectionHealthById] = useState<
     Record<string, ConnectionHealth>
   >({});
@@ -265,6 +297,7 @@ function App() {
     {},
   );
   const [schemaLoading, setSchemaLoading] = useState(false);
+  const [schemaError, setSchemaError] = useState<string | null>(null);
   const [schemaFilter, setSchemaFilter] = useState("");
   const [dbLoading, setDbLoading] = useState<Record<string, boolean>>({});
   const [selectedTable, setSelectedTable] = useState<SchemaTable | null>(null);
@@ -319,6 +352,10 @@ function App() {
   const [auditItems, setAuditItems] = useState<AuditItem[]>([]);
   const [appLogs, setAppLogs] = useState<AppLogItem[]>([]);
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
+  const [opsDialogOpen, setOpsDialogOpen] = useState(false);
+  const [opsDraft, setOpsDraft] = useState<OpsDraft>(baseOpsDraft);
+  const [opsPreviewCount, setOpsPreviewCount] = useState<number | null>(null);
+  const [opsSubmitting, setOpsSubmitting] = useState(false);
   const [connectionDraft, setConnectionDraft] =
     useState<ConnectionInput>(baseConnection);
   const [showCaCertPath, setShowCaCertPath] = useState(false);
@@ -480,7 +517,8 @@ function App() {
         const next: Record<string, ConnectionHealth> = {};
         profiles.forEach((profile) => {
           const resolved = results.find((result) => result.id === profile.id);
-          next[profile.id] = resolved?.health ?? prev[profile.id] ?? { state: "error" };
+          next[profile.id] = resolved?.health ??
+            prev[profile.id] ?? { state: "error" };
         });
         return next;
       });
@@ -492,9 +530,13 @@ function App() {
     setConnectionsLoading(true);
     try {
       const rows = await api.connectionList();
+      setConnectionsError(null);
       setConnections(rows);
       setActiveConnectionId((current) => current ?? rows[0]?.id);
       void refreshConnectionHealth(rows);
+    } catch (error) {
+      setConnectionsError(String(error));
+      throw error;
     } finally {
       setConnectionsLoading(false);
     }
@@ -512,6 +554,7 @@ function App() {
           api.auditList(150),
           api.logsList(200),
         ]);
+      setSchemaError(null);
       setDatabases(dbRows.map((row) => String(row.name ?? "")).filter(Boolean));
       setHistorySql(historyRows.map((item) => item.sql));
       setSnippets(
@@ -526,6 +569,9 @@ function App() {
       setTablesByDb({});
       setExpandedDb({});
       setSelectedTableDdl("");
+    } catch (error) {
+      setSchemaError(String(error));
+      throw error;
     } finally {
       setSchemaLoading(false);
     }
@@ -644,6 +690,7 @@ function App() {
     setDbLoading((prev) => ({ ...prev, [database]: true }));
     try {
       const rows = await api.schemaListTables(activeConnectionId, database);
+      setSchemaError(null);
       setTablesByDb((prev) => ({
         ...prev,
         [database]: rows.map((row) => ({
@@ -652,6 +699,9 @@ function App() {
           engine: String(row.engine ?? ""),
         })),
       }));
+    } catch (error) {
+      setSchemaError(String(error));
+      throw error;
     } finally {
       setDbLoading((prev) => ({ ...prev, [database]: false }));
     }
@@ -714,7 +764,7 @@ function App() {
         result,
         error: undefined,
       });
-      void loadWorkspace();
+      void loadWorkspace().catch((error) => toast.error(String(error)));
     } catch (error) {
       updateTab(activeTab.id, {
         running: false,
@@ -879,16 +929,36 @@ function App() {
     }
   };
 
+  const openOpsDialog = () => {
+    if (!activeConnectionId) return;
+    setOpsDraft({
+      ...baseOpsDraft,
+      database: selectedTable?.database ?? baseOpsDraft.database,
+      table: selectedTable?.name ?? "",
+    });
+    setOpsPreviewCount(null);
+    setOpsDialogOpen(true);
+  };
+
   const runOperation = async () => {
     if (!activeConnectionId) return;
-    const action = window.prompt(
-      "Operation: create-db | drop-db | create-table | drop-table | insert | update | delete",
-    );
-    if (!action) return;
+
+    const database = opsDraft.database.trim();
+    const table = opsDraft.table.trim();
+    const whereClause = opsDraft.whereClause.trim();
+    const confirmToken = opsDraft.confirmToken.trim();
+    const parseJsonField = <T,>(raw: string, label: string): T => {
+      try {
+        return JSON.parse(raw) as T;
+      } catch (error) {
+        throw new Error(`Invalid ${label} JSON: ${String(error)}`);
+      }
+    };
+
+    setOpsSubmitting(true);
     try {
-      if (action === "create-db") {
-        const database = window.prompt("Database name");
-        if (!database) return;
+      if (opsDraft.action === "create-db") {
+        if (!database) throw new Error("Database name is required.");
         toast.success(
           (
             await api.createDatabase({
@@ -898,46 +968,44 @@ function App() {
             })
           ).message,
         );
-      } else if (action === "drop-db") {
-        const database = window.prompt("Database name");
-        if (!database) return;
-        const token = window.prompt("Confirm token (DROP)");
+      } else if (opsDraft.action === "drop-db") {
+        if (!database) throw new Error("Database name is required.");
         toast.success(
           (
             await api.dropDatabase({
               connectionId: activeConnectionId,
               database,
               ifExists: true,
-              confirmToken: token ?? "",
+              confirmToken,
             })
           ).message,
         );
-      } else if (action === "create-table") {
-        const database = window.prompt("Database", "default");
-        const table = window.prompt("Table");
-        const columnsDdl = window.prompt(
-          "Columns DDL",
-          "id UInt64, ts DateTime",
-        );
-        const engine = window.prompt("Engine", "MergeTree() ORDER BY tuple()");
-        if (!database || !table || !columnsDdl || !engine) return;
+      } else if (opsDraft.action === "create-table") {
+        if (!database || !table) {
+          throw new Error("Database and table are required.");
+        }
+        if (!opsDraft.columnsDdl.trim()) {
+          throw new Error("Columns DDL is required.");
+        }
+        if (!opsDraft.engine.trim()) {
+          throw new Error("Engine is required.");
+        }
         toast.success(
           (
             await api.createTable({
               connectionId: activeConnectionId,
               database,
               table,
-              columnsDdl,
-              engine,
+              columnsDdl: opsDraft.columnsDdl.trim(),
+              engine: opsDraft.engine.trim(),
               ifNotExists: true,
             })
           ).message,
         );
-      } else if (action === "drop-table") {
-        const database = window.prompt("Database", "default");
-        const table = window.prompt("Table");
-        const token = window.prompt("Confirm token (DROP)");
-        if (!database || !table) return;
+      } else if (opsDraft.action === "drop-table") {
+        if (!database || !table) {
+          throw new Error("Database and table are required.");
+        }
         toast.success(
           (
             await api.dropTable({
@@ -945,15 +1013,18 @@ function App() {
               database,
               table,
               ifExists: true,
-              confirmToken: token ?? "",
+              confirmToken,
             })
           ).message,
         );
-      } else if (action === "insert") {
-        const database = window.prompt("Database", "default");
-        const table = window.prompt("Table");
-        const row = window.prompt("Row JSON", '{"id":1}');
-        if (!database || !table || !row) return;
+      } else if (opsDraft.action === "insert") {
+        if (!database || !table) {
+          throw new Error("Database and table are required.");
+        }
+        const row = parseJsonField<Record<string, unknown>>(
+          opsDraft.rowJson,
+          "row",
+        );
         toast.success(
           (
             await api.insertRow({
@@ -961,29 +1032,31 @@ function App() {
               database,
               table,
               whereClause: "",
-              row: JSON.parse(row),
+              row,
             })
           ).message,
         );
-      } else if (action === "update") {
-        const database = window.prompt("Database", "default");
-        const table = window.prompt("Table");
-        const whereClause = window.prompt("WHERE", "id = 1");
-        const setValues = window.prompt("SET JSON", '{"id":2}');
-        const preview = await api.updateRowsPreview({
-          connectionId: activeConnectionId,
-          database: database ?? "",
-          table: table ?? "",
-          whereClause: whereClause ?? "",
-        });
-        if (
-          !window.confirm(
-            `Affected rows preview: ${preview.affectedRows}. Continue?`,
-          )
-        )
+      } else if (opsDraft.action === "update") {
+        if (!database || !table || !whereClause) {
+          throw new Error("Database, table, and WHERE clause are required.");
+        }
+        if (opsPreviewCount === null) {
+          const preview = await api.updateRowsPreview({
+            connectionId: activeConnectionId,
+            database,
+            table,
+            whereClause,
+          });
+          setOpsPreviewCount(preview.affectedRows);
+          toast(
+            `Preview complete: ${preview.affectedRows} row(s) affected. Click Execute again to continue.`,
+          );
           return;
-        const token = window.prompt("Confirm token (UPDATE)");
-        if (!database || !table || !whereClause || !setValues) return;
+        }
+        const setValues = parseJsonField<Record<string, unknown>>(
+          opsDraft.setValuesJson,
+          "SET values",
+        );
         toast.success(
           (
             await api.updateRowsExecute({
@@ -991,29 +1064,28 @@ function App() {
               database,
               table,
               whereClause,
-              setValues: JSON.parse(setValues),
-              confirmToken: token ?? "",
+              setValues,
+              confirmToken,
             })
           ).message,
         );
-      } else if (action === "delete") {
-        const database = window.prompt("Database", "default");
-        const table = window.prompt("Table");
-        const whereClause = window.prompt("WHERE", "id = 1");
-        const preview = await api.deleteRowsPreview({
-          connectionId: activeConnectionId,
-          database: database ?? "",
-          table: table ?? "",
-          whereClause: whereClause ?? "",
-        });
-        if (
-          !window.confirm(
-            `Affected rows preview: ${preview.affectedRows}. Continue?`,
-          )
-        )
+      } else if (opsDraft.action === "delete") {
+        if (!database || !table || !whereClause) {
+          throw new Error("Database, table, and WHERE clause are required.");
+        }
+        if (opsPreviewCount === null) {
+          const preview = await api.deleteRowsPreview({
+            connectionId: activeConnectionId,
+            database,
+            table,
+            whereClause,
+          });
+          setOpsPreviewCount(preview.affectedRows);
+          toast(
+            `Preview complete: ${preview.affectedRows} row(s) affected. Click Execute again to continue.`,
+          );
           return;
-        const token = window.prompt("Confirm token (DELETE)");
-        if (!database || !table || !whereClause) return;
+        }
         toast.success(
           (
             await api.deleteRowsExecute({
@@ -1021,16 +1093,19 @@ function App() {
               database,
               table,
               whereClause,
-              confirmToken: token ?? "",
+              confirmToken,
             })
           ).message,
         );
-      } else {
-        toast.error("Unknown action.");
       }
+
+      setOpsDialogOpen(false);
+      setOpsPreviewCount(null);
       await loadWorkspace();
     } catch (error) {
       toast.error(String(error));
+    } finally {
+      setOpsSubmitting(false);
     }
   };
 
@@ -1243,20 +1318,12 @@ function App() {
   const checkGithubReleaseUpdate =
     async (): Promise<GithubUpdateInfo | null> => {
       const result = await api.appCheckUpdate();
-      if (
-        !result.available ||
-        !result.latestVersion ||
-        !result.assetName ||
-        !result.downloadUrl ||
-        !result.sha256
-      ) {
+      if (!result.available || !result.latestVersion || !result.assetName) {
         return null;
       }
       return {
         version: result.latestVersion,
         assetName: result.assetName,
-        downloadUrl: result.downloadUrl,
-        sha256: result.sha256,
         targetLabel: result.target,
       };
     };
@@ -1327,8 +1394,8 @@ function App() {
           version: githubUpdate.version,
           source: "github",
           assetName: githubUpdate.assetName,
-          downloadUrl: githubUpdate.downloadUrl,
-          sha256: githubUpdate.sha256,
+          downloadUrl: undefined,
+          sha256: undefined,
           targetLabel: githubUpdate.targetLabel,
         }));
         toast.success(
@@ -1347,17 +1414,8 @@ function App() {
     if (!isTauriRuntime) return;
     setUpdater((s) => ({ ...s, downloading: true, progress: 0 }));
     try {
-      if (
-        updater.source === "github" &&
-        updater.downloadUrl &&
-        updater.sha256 &&
-        updater.assetName
-      ) {
-        const response = await api.appInstallUpdate(
-          updater.downloadUrl,
-          updater.sha256,
-          updater.assetName,
-        );
+      if (updater.source === "github" && updater.assetName) {
+        const response = await api.appInstallUpdate();
         setUpdater((s) => ({
           ...s,
           downloading: false,
@@ -1460,6 +1518,27 @@ function App() {
           </div>
           <ScrollArea className="flex-1">
             <div className="space-y-0.5 px-2 pb-2">
+              {connectionsError ? (
+                <div className="mx-2 mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
+                  <div className="font-medium">Failed to load connections.</div>
+                  <div
+                    className="truncate text-[10px]"
+                    title={connectionsError}
+                  >
+                    {connectionsError}
+                  </div>
+                  <button
+                    className="mt-1 text-[10px] font-medium underline underline-offset-2"
+                    onClick={() =>
+                      void loadConnections().catch((error) =>
+                        toast.error(String(error)),
+                      )
+                    }
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : null}
               {connectionsLoading ? (
                 <div className="space-y-2 px-2 py-3">
                   <Skeleton className="h-9 w-full" />
@@ -1489,6 +1568,7 @@ function App() {
                     <div
                       key={connection.id}
                       role="button"
+                      aria-label={`Open connection ${connection.name}`}
                       tabIndex={0}
                       className={cn(
                         "group flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors",
@@ -1506,88 +1586,88 @@ function App() {
                         }
                       }}
                     >
-                    <div
-                      className={cn(
-                        "flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md",
-                        health?.state === "error"
-                          ? "bg-destructive/15"
-                          : activeConnectionId === connection.id
-                            ? "bg-primary/20"
-                            : "bg-muted/50",
-                      )}
-                    >
-                      <Server
+                      <div
                         className={cn(
-                          "h-3.5 w-3.5",
+                          "flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md",
                           health?.state === "error"
-                            ? "text-destructive"
+                            ? "bg-destructive/15"
                             : activeConnectionId === connection.id
+                              ? "bg-primary/20"
+                              : "bg-muted/50",
+                        )}
+                      >
+                        <Server
+                          className={cn(
+                            "h-3.5 w-3.5",
+                            health?.state === "error"
+                              ? "text-destructive"
+                              : activeConnectionId === connection.id
+                                ? "text-primary"
+                                : "text-muted-foreground",
+                          )}
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className={cn(
+                            "truncate text-xs font-medium",
+                            activeConnectionId === connection.id
                               ? "text-primary"
-                              : "text-muted-foreground",
-                        )}
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div
-                        className={cn(
-                          "truncate text-xs font-medium",
-                          activeConnectionId === connection.id
-                            ? "text-primary"
-                            : "text-foreground/90",
-                        )}
-                      >
-                        {connection.name}
+                              : "text-foreground/90",
+                          )}
+                        >
+                          {connection.name}
+                        </div>
+                        <div className="truncate text-[10px] text-muted-foreground">
+                          {connection.host}:{connection.port}
+                        </div>
+                        <div
+                          className={cn(
+                            "truncate text-[10px]",
+                            health?.state === "ok" && "text-emerald-300",
+                            health?.state === "checking" && "text-amber-300",
+                            health?.state === "error" && "text-destructive",
+                          )}
+                          title={health?.detail}
+                        >
+                          {health?.state === "ok"
+                            ? `Online${
+                                health.latencyMs !== undefined
+                                  ? ` · ${health.latencyMs}ms`
+                                  : ""
+                              }`
+                            : health?.state === "checking"
+                              ? "Checking..."
+                              : health?.state === "error"
+                                ? "Offline"
+                                : "Status unknown"}
+                        </div>
                       </div>
-                      <div className="truncate text-[10px] text-muted-foreground">
-                        {connection.host}:{connection.port}
-                      </div>
-                      <div
-                        className={cn(
-                          "truncate text-[10px]",
-                          health?.state === "ok" && "text-emerald-300",
-                          health?.state === "checking" && "text-amber-300",
-                          health?.state === "error" && "text-destructive",
-                        )}
-                        title={health?.detail}
-                      >
-                        {health?.state === "ok"
-                          ? `Online${
-                              health.latencyMs !== undefined
-                                ? ` · ${health.latencyMs}ms`
-                                : ""
-                            }`
-                          : health?.state === "checking"
-                            ? "Checking..."
-                            : health?.state === "error"
-                              ? "Offline"
-                              : "Status unknown"}
+                      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                        <button
+                          className="rounded-md p-1 hover:bg-background/80"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditDialog(connection);
+                          }}
+                          title="Edit"
+                          aria-label={`Edit connection ${connection.name}`}
+                        >
+                          <Pencil className="h-3 w-3 text-muted-foreground" />
+                        </button>
+                        <button
+                          className="rounded-md p-1 hover:bg-destructive/20"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void deleteConnection(connection.id);
+                          }}
+                          title="Delete"
+                          aria-label={`Delete connection ${connection.name}`}
+                        >
+                          <Trash2 className="h-3 w-3 text-muted-foreground" />
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                      <button
-                        className="rounded-md p-1 hover:bg-background/80"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditDialog(connection);
-                        }}
-                        title="Edit"
-                        aria-label={`Edit connection ${connection.name}`}
-                      >
-                        <Pencil className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                      <button
-                        className="rounded-md p-1 hover:bg-destructive/20"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void deleteConnection(connection.id);
-                        }}
-                        title="Delete"
-                        aria-label={`Delete connection ${connection.name}`}
-                      >
-                        <Trash2 className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                    </div>
-                  </div>
                   );
                 })
               )}
@@ -1604,7 +1684,11 @@ function App() {
               </span>
               <button
                 className="rounded-md p-1 hover:bg-muted/60"
-                onClick={() => void loadWorkspace()}
+                onClick={() =>
+                  void loadWorkspace().catch((error) =>
+                    toast.error(String(error)),
+                  )
+                }
                 title="Refresh"
                 aria-label="Refresh workspace"
               >
@@ -1624,9 +1708,28 @@ function App() {
                     value={schemaFilter}
                     onChange={(e) => setSchemaFilter(e.currentTarget.value)}
                     placeholder="Filter databases/tables"
+                    aria-label="Filter databases and tables"
                     className="h-7 border-border/50 pl-8 text-xs"
                   />
                 </div>
+                {schemaError ? (
+                  <div className="mx-2 mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
+                    <div className="font-medium">Failed to load schema.</div>
+                    <div className="truncate text-[10px]" title={schemaError}>
+                      {schemaError}
+                    </div>
+                    <button
+                      className="mt-1 text-[10px] font-medium underline underline-offset-2"
+                      onClick={() =>
+                        void loadWorkspace().catch((error) =>
+                          toast.error(String(error)),
+                        )
+                      }
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : null}
                 {schemaLoading && databases.length === 0 ? (
                   <div className="space-y-1.5 px-2 py-2">
                     <Skeleton className="h-6 w-full" />
@@ -1639,7 +1742,11 @@ function App() {
                     <div key={database}>
                       <button
                         className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground/80 hover:bg-muted/50"
-                        onClick={() => void openDb(database)}
+                        onClick={() =>
+                          void openDb(database).catch((error) =>
+                            toast.error(String(error)),
+                          )
+                        }
                       >
                         {expandedDb[database] ? (
                           <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
@@ -2001,7 +2108,9 @@ function App() {
                     tags: ["manual"],
                   });
                   toast.success("Snippet saved.");
-                  void loadWorkspace();
+                  void loadWorkspace().catch((error) =>
+                    toast.error(String(error)),
+                  );
                 }}
               >
                 <Save className="h-3.5 w-3.5" />
@@ -2011,7 +2120,7 @@ function App() {
                 size="sm"
                 variant="ghost"
                 className="h-7 gap-1.5 px-2.5 text-xs"
-                onClick={() => void runOperation()}
+                onClick={openOpsDialog}
                 disabled={!isTauriRuntime}
               >
                 <Sparkles className="h-3.5 w-3.5" />
@@ -2021,10 +2130,13 @@ function App() {
 
             {/* Tab bar */}
             <div className="flex items-center border-b border-border/50 bg-muted/20">
-              <div className="flex items-center overflow-x-auto">
+              <div className="flex items-center overflow-x-auto" role="tablist">
                 {tabs.map((tab, tabIndex) => (
                   <div
                     key={tab.id}
+                    role="tab"
+                    aria-selected={tab.id === activeTab?.id}
+                    tabIndex={0}
                     className={cn(
                       "group relative flex cursor-pointer select-none items-center gap-1 border-r border-border/30 px-3 py-1.5 text-xs",
                       tab.id === activeTab?.id
@@ -2032,6 +2144,12 @@ function App() {
                         : "text-muted-foreground hover:bg-background/50 hover:text-foreground/80",
                     )}
                     onClick={() => setActiveTabId(tab.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setActiveTabId(tab.id);
+                      }
+                    }}
                   >
                     {tab.id === activeTab?.id && (
                       <div className="absolute inset-x-0 top-0 h-0.5 bg-primary" />
@@ -2043,6 +2161,7 @@ function App() {
                           className="rounded-sm p-0.5 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
                           disabled={tabIndex === 0}
                           title="Move tab left"
+                          aria-label={`Move ${tab.title} tab left`}
                           onClick={(e) => {
                             e.stopPropagation();
                             moveTab(tab.id, -1);
@@ -2054,6 +2173,7 @@ function App() {
                           className="rounded-sm p-0.5 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
                           disabled={tabIndex === tabs.length - 1}
                           title="Move tab right"
+                          aria-label={`Move ${tab.title} tab right`}
                           onClick={(e) => {
                             e.stopPropagation();
                             moveTab(tab.id, 1);
@@ -2066,6 +2186,7 @@ function App() {
                     {tabs.length > 1 && (
                       <button
                         className="ml-0.5 rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
+                        aria-label={`Close ${tab.title} tab`}
                         onClick={(e) => {
                           e.stopPropagation();
                           setTabs((prev) => {
@@ -2093,6 +2214,7 @@ function App() {
                   setActiveTabId(tab.id);
                 }}
                 title="New tab"
+                aria-label="Create new query tab"
               >
                 <Plus className="h-3.5 w-3.5" />
               </button>
@@ -2328,6 +2450,8 @@ function App() {
                         return (
                           <TableRow
                             key={idx}
+                            role="button"
+                            tabIndex={0}
                             className={cn(
                               "cursor-pointer transition-colors",
                               isPendingDelete
@@ -2341,6 +2465,14 @@ function App() {
                                 selectedRowIdx === idx ? null : idx,
                               )
                             }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setSelectedRowIdx(
+                                  selectedRowIdx === idx ? null : idx,
+                                );
+                              }
+                            }}
                           >
                             {activeTab.result!.columns.map((col) => {
                               const cellKey = `${idx}:${col}`;
@@ -2548,9 +2680,16 @@ function App() {
                               </button>
                               <button
                                 className="rounded-md p-0.5 opacity-0 transition-opacity hover:bg-destructive/20 group-hover:opacity-100"
+                                aria-label={`Delete snippet ${snippet.name}`}
                                 onClick={async () => {
-                                  await api.snippetDelete(snippet.id);
-                                  void loadWorkspace();
+                                  try {
+                                    await api.snippetDelete(snippet.id);
+                                    void loadWorkspace().catch((error) =>
+                                      toast.error(String(error)),
+                                    );
+                                  } catch (error) {
+                                    toast.error(String(error));
+                                  }
                                 }}
                               >
                                 <Trash2 className="h-3 w-3 text-muted-foreground" />
@@ -2629,6 +2768,271 @@ function App() {
           </>
         )}
       </main>
+
+      {/* ── Operations Dialog ── */}
+      <Dialog
+        open={opsDialogOpen}
+        onOpenChange={(open) => {
+          setOpsDialogOpen(open);
+          if (!open) {
+            setOpsPreviewCount(null);
+            setOpsSubmitting(false);
+          }
+        }}
+      >
+        <DialogContent className="border-border/60 sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>SQL Operations</DialogTitle>
+            <DialogDescription>
+              Run DDL/DML helpers against{" "}
+              {activeConnection?.name
+                ? `connection "${activeConnection.name}"`
+                : "the active connection"}
+              .
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="ops-action"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                Action
+              </label>
+              <select
+                id="ops-action"
+                value={opsDraft.action}
+                className="h-9 w-full rounded-md border border-border/60 bg-background px-2 text-sm"
+                onChange={(e) => {
+                  const action = e.currentTarget.value as OpsAction;
+                  setOpsDraft((prev) => ({
+                    ...prev,
+                    action,
+                    confirmToken:
+                      action === "drop-db" || action === "drop-table"
+                        ? "DROP"
+                        : action === "update"
+                          ? "UPDATE"
+                          : action === "delete"
+                            ? "DELETE"
+                            : "",
+                  }));
+                  setOpsPreviewCount(null);
+                }}
+              >
+                <option value="create-db">Create Database</option>
+                <option value="drop-db">Drop Database</option>
+                <option value="create-table">Create Table</option>
+                <option value="drop-table">Drop Table</option>
+                <option value="insert">Insert Row</option>
+                <option value="update">Update Rows</option>
+                <option value="delete">Delete Rows</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="ops-database"
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  Database
+                </label>
+                <Input
+                  id="ops-database"
+                  value={opsDraft.database}
+                  onChange={(e) => {
+                    const value = e.currentTarget.value;
+                    setOpsDraft((prev) => ({ ...prev, database: value }));
+                    setOpsPreviewCount(null);
+                  }}
+                />
+              </div>
+              {opsDraft.action !== "create-db" && (
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="ops-table"
+                    className="text-xs font-medium text-muted-foreground"
+                  >
+                    Table
+                  </label>
+                  <Input
+                    id="ops-table"
+                    value={opsDraft.table}
+                    onChange={(e) => {
+                      const value = e.currentTarget.value;
+                      setOpsDraft((prev) => ({ ...prev, table: value }));
+                      setOpsPreviewCount(null);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {opsDraft.action === "create-table" ? (
+              <>
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="ops-columns-ddl"
+                    className="text-xs font-medium text-muted-foreground"
+                  >
+                    Columns DDL
+                  </label>
+                  <Textarea
+                    id="ops-columns-ddl"
+                    className="mono min-h-[72px]"
+                    value={opsDraft.columnsDdl}
+                    onChange={(e) =>
+                      setOpsDraft((prev) => ({
+                        ...prev,
+                        columnsDdl: e.currentTarget.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="ops-engine"
+                    className="text-xs font-medium text-muted-foreground"
+                  >
+                    Engine
+                  </label>
+                  <Input
+                    id="ops-engine"
+                    value={opsDraft.engine}
+                    onChange={(e) =>
+                      setOpsDraft((prev) => ({
+                        ...prev,
+                        engine: e.currentTarget.value,
+                      }))
+                    }
+                  />
+                </div>
+              </>
+            ) : null}
+
+            {opsDraft.action === "insert" ? (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="ops-row-json"
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  Row JSON
+                </label>
+                <Textarea
+                  id="ops-row-json"
+                  className="mono min-h-[72px]"
+                  value={opsDraft.rowJson}
+                  onChange={(e) =>
+                    setOpsDraft((prev) => ({
+                      ...prev,
+                      rowJson: e.currentTarget.value,
+                    }))
+                  }
+                />
+              </div>
+            ) : null}
+
+            {(opsDraft.action === "update" || opsDraft.action === "delete") && (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="ops-where-clause"
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  WHERE clause
+                </label>
+                <Textarea
+                  id="ops-where-clause"
+                  className="mono min-h-[72px]"
+                  value={opsDraft.whereClause}
+                  onChange={(e) => {
+                    const value = e.currentTarget.value;
+                    setOpsDraft((prev) => ({ ...prev, whereClause: value }));
+                    setOpsPreviewCount(null);
+                  }}
+                />
+              </div>
+            )}
+
+            {opsDraft.action === "update" ? (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="ops-set-values-json"
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  SET values JSON
+                </label>
+                <Textarea
+                  id="ops-set-values-json"
+                  className="mono min-h-[72px]"
+                  value={opsDraft.setValuesJson}
+                  onChange={(e) =>
+                    setOpsDraft((prev) => ({
+                      ...prev,
+                      setValuesJson: e.currentTarget.value,
+                    }))
+                  }
+                />
+              </div>
+            ) : null}
+
+            {(opsDraft.action === "drop-db" ||
+              opsDraft.action === "drop-table" ||
+              opsDraft.action === "update" ||
+              opsDraft.action === "delete") && (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="ops-confirm-token"
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  Confirm token
+                </label>
+                <Input
+                  id="ops-confirm-token"
+                  value={opsDraft.confirmToken}
+                  onChange={(e) =>
+                    setOpsDraft((prev) => ({
+                      ...prev,
+                      confirmToken: e.currentTarget.value,
+                    }))
+                  }
+                />
+              </div>
+            )}
+
+            {opsPreviewCount !== null ? (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[11px] text-amber-200">
+                Preview: {opsPreviewCount} row(s) will be affected.
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setOpsDialogOpen(false);
+                setOpsPreviewCount(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={!isTauriRuntime || opsSubmitting}
+              onClick={() => void runOperation()}
+            >
+              {opsSubmitting ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : null}
+              {(opsDraft.action === "update" || opsDraft.action === "delete") &&
+              opsPreviewCount === null
+                ? "Preview"
+                : "Execute"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Connection Dialog ── */}
       <Dialog

@@ -1,7 +1,7 @@
+use std::collections::HashMap;
 use std::time::Instant;
 use std::{fs, path::PathBuf};
 use std::{path::Path, process::Command};
-use std::collections::HashMap;
 
 use keyring::Entry;
 use serde::Deserialize;
@@ -85,15 +85,51 @@ fn keyring_entry(connection_id: &str) -> anyhow::Result<Entry> {
     Ok(entry)
 }
 
-fn read_fallback_secret(secrets_path: &Path, connection_id: &str) -> anyhow::Result<Option<String>> {
+#[cfg(unix)]
+fn set_private_file_permissions(path: &Path) -> anyhow::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn set_private_file_permissions(_path: &Path) -> anyhow::Result<()> {
+    Ok(())
+}
+
+fn load_fallback_secrets(secrets_path: &Path) -> anyhow::Result<HashMap<String, String>> {
     if !secrets_path.exists() {
-        return Ok(None);
+        return Ok(HashMap::new());
     }
+    set_private_file_permissions(secrets_path)?;
     let raw = fs::read_to_string(secrets_path)?;
     if raw.trim().is_empty() {
-        return Ok(None);
+        return Ok(HashMap::new());
     }
-    let secrets: HashMap<String, String> = serde_json::from_str(&raw).unwrap_or_default();
+    serde_json::from_str(&raw).map_err(|err| {
+        anyhow::anyhow!(
+            "Fallback secrets file is corrupted ({}): {}",
+            secrets_path.display(),
+            err
+        )
+    })
+}
+
+fn write_fallback_secrets(
+    secrets_path: &Path,
+    secrets: &HashMap<String, String>,
+) -> anyhow::Result<()> {
+    let payload = serde_json::to_string_pretty(secrets)?;
+    let tmp_path = secrets_path.with_extension("tmp");
+    fs::write(&tmp_path, payload)?;
+    set_private_file_permissions(&tmp_path)?;
+    fs::rename(&tmp_path, secrets_path)?;
+    set_private_file_permissions(secrets_path)?;
+    Ok(())
+}
+
+fn read_fallback_secret(secrets_path: &Path, connection_id: &str) -> anyhow::Result<Option<String>> {
+    let secrets = load_fallback_secrets(secrets_path)?;
     Ok(secrets.get(connection_id).cloned())
 }
 
@@ -102,28 +138,15 @@ fn write_fallback_secret(
     connection_id: &str,
     password: &str,
 ) -> anyhow::Result<()> {
-    let mut secrets: HashMap<String, String> = if secrets_path.exists() {
-        let raw = fs::read_to_string(secrets_path)?;
-        serde_json::from_str(&raw).unwrap_or_default()
-    } else {
-        HashMap::new()
-    };
+    let mut secrets = load_fallback_secrets(secrets_path)?;
     secrets.insert(connection_id.to_string(), password.to_string());
-    fs::write(secrets_path, serde_json::to_string_pretty(&secrets)?)?;
-    Ok(())
+    write_fallback_secrets(secrets_path, &secrets)
 }
 
 fn delete_fallback_secret(secrets_path: &Path, connection_id: &str) -> anyhow::Result<()> {
-    if !secrets_path.exists() {
-        return Ok(());
-    }
-    let raw = fs::read_to_string(secrets_path)?;
-    if raw.trim().is_empty() {
-        return Ok(());
-    }
-    let mut secrets: HashMap<String, String> = serde_json::from_str(&raw).unwrap_or_default();
+    let mut secrets = load_fallback_secrets(secrets_path)?;
     if secrets.remove(connection_id).is_some() {
-        fs::write(secrets_path, serde_json::to_string_pretty(&secrets)?)?;
+        write_fallback_secrets(secrets_path, &secrets)?;
     }
     Ok(())
 }
@@ -222,14 +245,14 @@ fn get_connection_with_secret(
     Ok((profile, password))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct GithubReleaseAsset {
     name: String,
     browser_download_url: String,
     digest: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct GithubRelease {
     tag_name: String,
     assets: Vec<GithubReleaseAsset>,
@@ -313,6 +336,57 @@ fn resolve_updater_repo() -> String {
         return normalized;
     }
     "lord007tn/simple-sdm".to_string()
+}
+
+fn github_token() -> Option<String> {
+    std::env::var("GITHUB_TOKEN")
+        .or_else(|_| std::env::var("GH_TOKEN"))
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn github_api_request(url: &str) -> reqwest::RequestBuilder {
+    let client = reqwest::Client::new();
+    let mut request = client
+        .get(url)
+        .header("Accept", "application/vnd.github+json")
+        .header("User-Agent", "simple-sdm-updater");
+    if let Some(token) = github_token() {
+        request = request.bearer_auth(token);
+    }
+    request
+}
+
+async fn fetch_releases(repo: &str) -> Result<Vec<GithubRelease>, String> {
+    let endpoint = format!("https://api.github.com/repos/{repo}/releases?per_page=20");
+    let response = github_api_request(&endpoint)
+        .send()
+        .await
+        .map_err(|err| err.to_string())?;
+    let status = response.status();
+    if !status.is_success() {
+        let guidance = if status.as_u16() == 404 {
+            format!(
+                "Repository '{}' was not found. Set SIMPLE_SDM_UPDATER_REPO to a valid owner/repo and provide GITHUB_TOKEN for private repositories.",
+                repo
+            )
+        } else if status.as_u16() == 401 || status.as_u16() == 403 {
+            "Authentication failed for GitHub API. Check GITHUB_TOKEN or GH_TOKEN permissions."
+                .to_string()
+        } else {
+            "Could not read release metadata from GitHub.".to_string()
+        };
+        return Err(format!(
+            "GitHub updater request failed with HTTP {}. {}",
+            status.as_u16(),
+            guidance
+        ));
+    }
+    response
+        .json::<Vec<GithubRelease>>()
+        .await
+        .map_err(|err| err.to_string())
 }
 
 fn release_sha256(asset: &GithubReleaseAsset) -> Option<String> {
@@ -1318,42 +1392,7 @@ pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheck
     }
 
     let repo = resolve_updater_repo();
-    let endpoint = format!("https://api.github.com/repos/{repo}/releases?per_page=20");
-    let mut request = reqwest::Client::new()
-        .get(endpoint)
-        .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", "simple-sdm-updater");
-
-    if let Ok(token) = std::env::var("GITHUB_TOKEN").or_else(|_| std::env::var("GH_TOKEN")) {
-        if !token.trim().is_empty() {
-            request = request.bearer_auth(token.trim());
-        }
-    }
-
-    let response = request.send().await.map_err(|err| err.to_string())?;
-    let status = response.status();
-    if !status.is_success() {
-        let guidance = if status.as_u16() == 404 {
-            format!(
-                "Repository '{}' was not found. Set SIMPLE_SDM_UPDATER_REPO to a valid owner/repo and provide GITHUB_TOKEN for private repositories.",
-                repo
-            )
-        } else if status.as_u16() == 401 || status.as_u16() == 403 {
-            "Authentication failed for GitHub API. Check GITHUB_TOKEN or GH_TOKEN permissions."
-                .to_string()
-        } else {
-            "Could not read release metadata from GitHub.".to_string()
-        };
-        return Err(format!(
-            "GitHub updater request failed with HTTP {}. {}",
-            status.as_u16(),
-            guidance
-        ));
-    }
-    let releases = response
-        .json::<Vec<GithubRelease>>()
-        .await
-        .map_err(|err| err.to_string())?;
+    let releases = fetch_releases(&repo).await?;
     let Some((_release, asset, latest_version, sha256)) =
         select_release_for_target(&releases, &current_version, os, arch)
     else {
@@ -1377,6 +1416,25 @@ pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheck
         sha256: Some(sha256),
         target,
     })
+}
+
+async fn download_release_asset(download_url: &str) -> Result<Vec<u8>, String> {
+    let response = github_api_request(download_url)
+        .header("Accept", "application/octet-stream")
+        .send()
+        .await
+        .map_err(|err| err.to_string())?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "Failed to download update asset: HTTP {}",
+            response.status()
+        ));
+    }
+    response
+        .bytes()
+        .await
+        .map(|chunk| chunk.to_vec())
+        .map_err(|err| err.to_string())
 }
 
 fn launch_installer(installer_path: &Path) -> anyhow::Result<()> {
@@ -1451,13 +1509,44 @@ fn launch_installer(installer_path: &Path) -> anyhow::Result<()> {
 }
 
 #[tauri::command]
-pub async fn app_install_update(
-    _state: State<'_, AppState>,
-    download_url: String,
-    sha256: String,
-    asset_name: String,
-) -> Result<CommandMessage, String> {
-    let safe_name = asset_name
+pub async fn app_install_update(_state: State<'_, AppState>) -> Result<CommandMessage, String> {
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+    let (os, arch, _) = runtime_target();
+    if os == "unknown" || arch == "unknown" {
+        return Err("Updater is not available on this runtime target.".to_string());
+    }
+
+    let repo = resolve_updater_repo();
+    let releases = fetch_releases(&repo).await?;
+    let Some((_release, asset, _latest_version, sha256)) =
+        select_release_for_target(&releases, &current_version, os, arch)
+    else {
+        return Err("No newer update is available for this runtime target.".to_string());
+    };
+
+    let parsed_url = reqwest::Url::parse(asset.browser_download_url.trim())
+        .map_err(|_| "Resolved release asset URL is invalid.".to_string())?;
+    if parsed_url.scheme() != "https" {
+        return Err("Resolved release asset URL must use HTTPS.".to_string());
+    }
+    let host = parsed_url
+        .host_str()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if host != "github.com" {
+        return Err("Resolved release asset URL is not hosted on GitHub.".to_string());
+    }
+    let normalized_repo = repo.to_ascii_lowercase();
+    if !parsed_url
+        .path()
+        .to_ascii_lowercase()
+        .contains(&format!("/{normalized_repo}/releases/download/"))
+    {
+        return Err("Resolved release asset URL does not match configured updater repository.".to_string());
+    }
+
+    let safe_name = asset
+        .name
         .trim()
         .chars()
         .map(|ch| {
@@ -1469,40 +1558,14 @@ pub async fn app_install_update(
         })
         .collect::<String>();
     if safe_name.is_empty() {
-        return Err("Asset name is required.".to_string());
+        return Err("Resolved release asset name is invalid.".to_string());
     }
     let expected_hash = sha256.trim().to_ascii_lowercase();
     if expected_hash.len() != 64 || !expected_hash.chars().all(|ch| ch.is_ascii_hexdigit()) {
-        return Err("SHA256 hash is invalid.".to_string());
-    }
-    let parsed_url = reqwest::Url::parse(download_url.trim())
-        .map_err(|_| "Download URL is invalid.".to_string())?;
-    if parsed_url.scheme() != "https" {
-        return Err("Download URL must use HTTPS.".to_string());
-    }
-    let host = parsed_url
-        .host_str()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if host != "github.com" {
-        return Err("Only GitHub-hosted release download URLs are allowed.".to_string());
-    }
-    if !parsed_url.path().contains("/releases/download/") {
-        return Err("Download URL must target GitHub release assets.".to_string());
+        return Err("Resolved release asset SHA256 is invalid.".to_string());
     }
 
-    let response = reqwest::Client::new()
-        .get(download_url.trim())
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    if !response.status().is_success() {
-        return Err(format!(
-            "Failed to download update asset: HTTP {}",
-            response.status()
-        ));
-    }
-    let bytes = response.bytes().await.map_err(|err| err.to_string())?;
+    let bytes = download_release_asset(asset.browser_download_url.trim()).await?;
 
     let mut hasher = Sha256::new();
     hasher.update(&bytes);

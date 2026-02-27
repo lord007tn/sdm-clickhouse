@@ -10,6 +10,30 @@ use chrono::Utc;
 use directories::ProjectDirs;
 use tauri::Manager;
 
+#[cfg(unix)]
+fn set_unix_private_dir(path: &std::path::Path) -> anyhow::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn set_unix_private_dir(_path: &std::path::Path) -> anyhow::Result<()> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn set_unix_private_file(path: &std::path::Path) -> anyhow::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn set_unix_private_file(_path: &std::path::Path) -> anyhow::Result<()> {
+    Ok(())
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub db_path: PathBuf,
@@ -27,8 +51,12 @@ pub fn run() {
                 .ok_or_else(|| anyhow::anyhow!("failed to resolve app data directory"))?;
             let data_dir = dirs.data_local_dir().to_path_buf();
             fs::create_dir_all(&data_dir)?;
+            set_unix_private_dir(&data_dir)?;
             let db_path = data_dir.join("simple_sdm.sqlite3");
             let secrets_path = data_dir.join("secrets_fallback.json");
+            if secrets_path.exists() {
+                let _ = set_unix_private_file(&secrets_path);
+            }
             let startup_notice = match db::init_database(&db_path) {
                 Ok(_) => None,
                 Err(err) => {
