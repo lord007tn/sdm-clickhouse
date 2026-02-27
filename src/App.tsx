@@ -27,13 +27,22 @@ import {
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import {
+  buildWhereClause,
+  coerceEditedValue,
+  parseTableFromSql,
+} from "@/features/query/lib/sql";
+import {
+  createTab,
+  TAB_STORAGE_KEY,
+  type QueryTab,
+} from "@/features/query/model/tab";
 import type {
   AppLogItem,
   AuditItem,
   ConnectionDiagnostics,
   ConnectionInput,
   ConnectionProfile,
-  QueryResult,
 } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,19 +69,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
 /* ────────────────────────────── Types ────────────────────────────── */
-
-type QueryTab = {
-  id: string;
-  title: string;
-  sql: string;
-  page: number;
-  pageSize: number;
-  timeoutMs: number;
-  running: boolean;
-  runningQueryId?: string;
-  result?: QueryResult;
-  error?: string;
-};
 
 type SchemaTable = { database: string; name: string; engine: string };
 type SchemaColumn = { name: string; type: string };
@@ -128,59 +124,6 @@ type OpsDraft = {
 
 /* ────────────────────────────── Helpers ──────────────────────────── */
 
-function parseTableFromSql(
-  sql: string,
-  fallbackDatabase?: string,
-): { database: string; table: string } | null {
-  const withDb = sql.match(/\bFROM\s+`?(\w+)`?\s*\.\s*`?(\w+)`?/i);
-  if (withDb) return { database: withDb[1], table: withDb[2] };
-  if (fallbackDatabase) {
-    const withoutDb = sql.match(/\bFROM\s+`?(\w+)`?(?:\s|$|;)/i);
-    if (withoutDb) return { database: fallbackDatabase, table: withoutDb[1] };
-  }
-  return null;
-}
-
-function valueToSql(value: unknown): string {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "boolean") return value ? "1" : "0";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "string") return `'${value.replace(/'/g, "''")}'`;
-  return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
-}
-
-function buildWhereClause(
-  row: Record<string, unknown>,
-  columns: string[],
-): string {
-  return columns
-    .map((col) => {
-      const val = row[col];
-      if (val === null || val === undefined) return `\`${col}\` IS NULL`;
-      if (typeof val === "object") {
-        // Complex ClickHouse types (Map/Array/Tuple/JSON-like payloads) are
-        // compared via JSON text to avoid parser/type coercion errors.
-        return `toJSONString(\`${col}\`) = ${valueToSql(JSON.stringify(val))}`;
-      }
-      return `\`${col}\` = ${valueToSql(val)}`;
-    })
-    .join(" AND ");
-}
-
-function coerceEditedValue(newText: string, originalValue: unknown): unknown {
-  const trimmed = newText.trim();
-  if (trimmed === "" || trimmed.toLowerCase() === "null") return null;
-  if (typeof originalValue === "number") {
-    const num = Number(trimmed);
-    if (!isNaN(num) && isFinite(num)) return num;
-  }
-  if (typeof originalValue === "boolean") {
-    if (trimmed === "true" || trimmed === "1") return true;
-    if (trimmed === "false" || trimmed === "0") return false;
-  }
-  return newText;
-}
-
 function Skeleton({
   className,
   style,
@@ -197,7 +140,6 @@ function Skeleton({
 }
 
 const APP_VERSION = "0.1.5";
-const TAB_STORAGE_KEY = "simple-sdm.tabs.v1";
 
 const baseConnection: ConnectionInput = {
   name: "",
@@ -230,18 +172,6 @@ const baseOpsDraft: OpsDraft = {
   setValuesJson: '{"id":2}',
   confirmToken: "",
 };
-
-function createTab(index = 1): QueryTab {
-  return {
-    id: crypto.randomUUID(),
-    title: `Query ${index}`,
-    sql: "SELECT now() AS ts, version() AS clickhouse_version",
-    page: 1,
-    pageSize: 100,
-    timeoutMs: 30000,
-    running: false,
-  };
-}
 
 function applyConnectionDefaults(input: ConnectionInput): ConnectionInput {
   return {
