@@ -32,6 +32,7 @@ import {
   coerceEditedValue,
   parseTableFromSql,
 } from "@/features/query/lib/sql";
+import { QueryEditor } from "@/features/query/components/QueryEditor";
 import {
   createTab,
   TAB_STORAGE_KEY,
@@ -374,6 +375,20 @@ function App() {
   const visibleRows = shouldVirtualize
     ? resultRows.slice(virtualStart, virtualEnd)
     : resultRows;
+  const queryCompletionTables = useMemo(
+    () =>
+      Object.values(tablesByDb).flatMap((tables) =>
+        tables.map((table) => ({
+          database: table.database,
+          name: table.name,
+        })),
+      ),
+    [tablesByDb],
+  );
+  const queryCompletionColumns = useMemo(
+    () => selectedTableColumns.map((column) => column.name),
+    [selectedTableColumns],
+  );
 
   /* ── Data loading ── */
   const refreshConnectionHealth = useCallback(
@@ -2154,15 +2169,17 @@ function App() {
             <div className="flex flex-1 flex-col overflow-hidden">
               {/* SQL editor */}
               <div className="flex-shrink-0 border-b border-border/50 p-3">
-                <Textarea
-                  className="mono min-h-[100px] resize-y border-border/40 bg-background/50 text-sm leading-relaxed"
+                <QueryEditor
                   value={activeTab?.sql ?? ""}
-                  onChange={(e) => {
-                    const value = e.currentTarget.value;
+                  onChange={(value) => {
                     if (!activeTab) return;
                     updateTab(activeTab.id, { sql: value });
                   }}
-                  placeholder="Write your SQL query here..."
+                  onRunQuery={() => void runQuery()}
+                  databases={databases}
+                  tables={queryCompletionTables}
+                  selectedTable={selectedTable}
+                  selectedTableColumns={queryCompletionColumns}
                 />
                 <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground">
                   <span>Page {activeTab?.page ?? 1}</span>
