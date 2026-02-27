@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.7] - 2026-02-27
+
+### Fixed
+
+- CI formatting gate failures on `pnpm-lock.yaml`, `src/App.tsx`, and `tests/app-shell.spec.ts`.
+- Release preflight now runs on a clean commit after formatting fixes.
+
 ## [0.1.6] - 2026-02-27
 
 ### Added
@@ -106,3 +113,4 @@ All notable changes to this project are documented in this file.
 [0.1.4]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.4
 [0.1.5]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.5
 [0.1.6]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.6
+[0.1.7]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.7

@@ -148,7 +148,7 @@ function Skeleton({
   );
 }
 
-const APP_VERSION = "0.1.6";
+const APP_VERSION = "0.1.7";
 
 const baseConnection: ConnectionInput = {
   name: "",
@@ -2374,10 +2374,7 @@ function App() {
               )}
 
               {/* Results table */}
-              <div
-                ref={resultContainerRef}
-                className="flex-1 overflow-auto"
-              >
+              <div ref={resultContainerRef} className="flex-1 overflow-auto">
                 {activeTab?.running ? (
                   <div className="p-3">
                     <div className="space-y-1">

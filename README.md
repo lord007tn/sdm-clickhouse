@@ -50,11 +50,11 @@ irm https://raw.githubusercontent.com/lord007tn/sdm-clickhouse/main/install.ps1 
 Optional pinned version examples:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lord007tn/sdm-clickhouse/main/install.sh | SDM_CLICKHOUSE_VERSION=0.1.6 bash
+curl -fsSL https://raw.githubusercontent.com/lord007tn/sdm-clickhouse/main/install.sh | SDM_CLICKHOUSE_VERSION=0.1.7 bash
 ```
 
 ```powershell
-$env:SDM_CLICKHOUSE_VERSION="0.1.6"; irm https://raw.githubusercontent.com/lord007tn/sdm-clickhouse/main/install.ps1 | iex
+$env:SDM_CLICKHOUSE_VERSION="0.1.7"; irm https://raw.githubusercontent.com/lord007tn/sdm-clickhouse/main/install.ps1 | iex
 ```
 
 Both installers automatically:

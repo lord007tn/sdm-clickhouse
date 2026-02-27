@@ -14,10 +14,12 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
   page,
 }) => {
   await page.addInitScript(() => {
-    (window as Window & { __QUERY_EXECUTE_CALLS__?: number })
-      .__QUERY_EXECUTE_CALLS__ = 0;
-    (window as Window & { __SNIPPET_SAVE_CALLS__?: number })
-      .__SNIPPET_SAVE_CALLS__ = 0;
+    (
+      window as Window & { __QUERY_EXECUTE_CALLS__?: number }
+    ).__QUERY_EXECUTE_CALLS__ = 0;
+    (
+      window as Window & { __SNIPPET_SAVE_CALLS__?: number }
+    ).__SNIPPET_SAVE_CALLS__ = 0;
     (window as Window & { __PROMPT_CALLED__?: boolean }).__PROMPT_CALLED__ =
       false;
     window.prompt = () => {
@@ -134,16 +136,18 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
     page.locator('textarea[placeholder="Write your SQL query here..."]'),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Run" }).click();
-  await expect.poll(async () => {
-    return await page.evaluate(
-      () =>
-        (
-          window as Window & {
-            __QUERY_EXECUTE_CALLS__?: number;
-          }
-        ).__QUERY_EXECUTE_CALLS__ ?? 0,
-    );
-  }).toBe(1);
+  await expect
+    .poll(async () => {
+      return await page.evaluate(
+        () =>
+          (
+            window as Window & {
+              __QUERY_EXECUTE_CALLS__?: number;
+            }
+          ).__QUERY_EXECUTE_CALLS__ ?? 0,
+      );
+    })
+    .toBe(1);
 
   await page.getByTestId("save-snippet-button").click();
   const snippetDialog = page.getByTestId("snippet-save-dialog");
@@ -153,16 +157,18 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
   await snippetNameInput.fill("Recent failed jobs");
   await snippetDialog.getByRole("button", { name: "Save" }).click();
   await expect(snippetDialog).toBeHidden();
-  await expect.poll(async () => {
-    return await page.evaluate(
-      () =>
-        (
-          window as Window & {
-            __SNIPPET_SAVE_CALLS__?: number;
-          }
-        ).__SNIPPET_SAVE_CALLS__ ?? 0,
-    );
-  }).toBe(1);
+  await expect
+    .poll(async () => {
+      return await page.evaluate(
+        () =>
+          (
+            window as Window & {
+              __SNIPPET_SAVE_CALLS__?: number;
+            }
+          ).__SNIPPET_SAVE_CALLS__ ?? 0,
+      );
+    })
+    .toBe(1);
   expect(
     await page.evaluate(
       () =>
