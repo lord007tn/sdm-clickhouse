@@ -1,4 +1,4 @@
-# ClickHouse Desktop Client (Simple SDM)
+# ClickHouse Desktop Client (SDM ClickHouse)
 
 Tauri + React + TypeScript desktop ClickHouse client inspired by Tiny RDM interaction patterns.
 
@@ -38,23 +38,23 @@ $env:Path += ";$env:USERPROFILE\.cargo\bin"
 Unix-like (`curl`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lord007tn/sdm-clickhouse/main/install.sh | bash
 ```
 
 Windows PowerShell (`irm`):
 
 ```powershell
-irm https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/lord007tn/sdm-clickhouse/main/install.ps1 | iex
 ```
 
 Optional pinned version examples:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.sh | SIMPLE_SDM_VERSION=0.1.5 bash
+curl -fsSL https://raw.githubusercontent.com/lord007tn/sdm-clickhouse/main/install.sh | SDM_CLICKHOUSE_VERSION=0.1.5 bash
 ```
 
 ```powershell
-$env:SIMPLE_SDM_VERSION="0.1.5"; irm https://raw.githubusercontent.com/lord007tn/simple-sdm/main/install.ps1 | iex
+$env:SDM_CLICKHOUSE_VERSION="0.1.5"; irm https://raw.githubusercontent.com/lord007tn/sdm-clickhouse/main/install.ps1 | iex
 ```
 
 Both installers automatically:
@@ -73,7 +73,7 @@ Default behavior is user-space install without sudo/admin when possible:
 Use `--system` (or `-SystemInstall` in PowerShell) only when you want system-wide install paths.
 
 If the repository is private, set `GITHUB_TOKEN` (or `GH_TOKEN`) before running installer commands.
-For in-app update checks against a fork/private release source, set `SIMPLE_SDM_UPDATER_REPO` (format: `owner/repo`).
+For in-app update checks against a fork/private release source, set `SDM_CLICKHOUSE_UPDATER_REPO` (format: `owner/repo`).
 
 ## Run (Desktop Dev)
 

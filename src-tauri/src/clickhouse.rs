@@ -111,7 +111,7 @@ pub fn paginate_select_sql(sql: &str, page: u32, page_size: u32) -> String {
     let safe_size = page_size.clamp(1, 5000);
     let offset = (safe_page - 1) * safe_size;
     format!(
-        "SELECT * FROM ({}) AS _simple_sdm_q LIMIT {} OFFSET {}",
+        "SELECT * FROM ({}) AS _sdm_clickhouse_q LIMIT {} OFFSET {}",
         strip_trailing_semicolon(sql),
         safe_size,
         offset

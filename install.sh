@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${SIMPLE_SDM_REPO:-lord007tn/simple-sdm}"
-VERSION="${SIMPLE_SDM_VERSION:-latest}"
+REPO="${SDM_CLICKHOUSE_REPO:-lord007tn/sdm-clickhouse}"
+VERSION="${SDM_CLICKHOUSE_VERSION:-latest}"
 CHECK_ONLY=0
-SYSTEM_INSTALL="${SIMPLE_SDM_SYSTEM_INSTALL:-0}"
+SYSTEM_INSTALL="${SDM_CLICKHOUSE_SYSTEM_INSTALL:-0}"
 GITHUB_TOKEN_VALUE="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 
 usage() {
   cat <<'USAGE'
-Simple SDM installer
+SDM ClickHouse installer
 
 Usage:
   install.sh [--version <version>] [--repo <owner/repo>] [--check] [--system]
 
 Environment:
-  SIMPLE_SDM_VERSION=<version|latest>
-  SIMPLE_SDM_REPO=<owner/repo>
-  SIMPLE_SDM_APPIMAGE_DIR=<dir>   # default: ~/.local/bin
-  SIMPLE_SDM_SYSTEM_INSTALL=1      # optional, use system-level install paths
+  SDM_CLICKHOUSE_VERSION=<version|latest>
+  SDM_CLICKHOUSE_REPO=<owner/repo>
+  SDM_CLICKHOUSE_APPIMAGE_DIR=<dir>   # default: ~/.local/bin
+  SDM_CLICKHOUSE_SYSTEM_INSTALL=1      # optional, use system-level install paths
   GITHUB_TOKEN / GH_TOKEN          # optional, needed for private repos
 USAGE
 }
@@ -248,8 +248,8 @@ install_linux() {
   fi
 
   if [[ "$name_lower" == *.appimage ]]; then
-    local install_dir="${SIMPLE_SDM_APPIMAGE_DIR:-$HOME/.local/bin}"
-    local target="${install_dir}/simple-sdm.AppImage"
+    local install_dir="${SDM_CLICKHOUSE_APPIMAGE_DIR:-$HOME/.local/bin}"
+    local target="${install_dir}/sdm-clickhouse.AppImage"
     mkdir -p "$install_dir"
     cp "$file" "$target"
     chmod +x "$target"
@@ -305,4 +305,4 @@ case "$OS_NAME" in
   macos) install_macos "$ASSET_PATH" ;;
 esac
 
-echo "Simple SDM installation complete."
+echo "SDM ClickHouse installation complete."

@@ -7,7 +7,7 @@ test("renders browser preview shell", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Add Connection" }).first(),
   ).toBeVisible();
-  await expect(page.getByText("Simple SDM")).toBeVisible();
+  await expect(page.getByText("SDM ClickHouse")).toBeVisible();
 });
 
 test("renders query workspace with mocked tauri bridge and codemirror editor", async ({

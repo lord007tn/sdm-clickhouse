@@ -13,7 +13,7 @@ export type QueryTab = {
   error?: string;
 };
 
-export const TAB_STORAGE_KEY = "simple-sdm.tabs.v1";
+export const TAB_STORAGE_KEY = "sdm-clickhouse.tabs.v1";
 
 export function createTab(index = 1): QueryTab {
   return {

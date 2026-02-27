@@ -2,7 +2,7 @@
 
 ## Product Goal
 
-`Simple SDM` is a desktop ClickHouse client inspired by Tiny RDM's connection-first workflow:
+`SDM ClickHouse` is a desktop ClickHouse client inspired by Tiny RDM's connection-first workflow:
 
 - Inspiration: https://redis.tinycraft.cc/
 - Tooling reference: https://knip.dev/

@@ -85,9 +85,9 @@ All notable changes to this project are documented in this file.
 - Windows: `.msi`, `NSIS setup.exe`
 - macOS: `.dmg`
 
-[0.1.0]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.0
-[0.1.1]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.1
-[0.1.2]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.2
-[0.1.3]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.3
-[0.1.4]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.4
-[0.1.5]: https://github.com/lord007tn/simple-sdm/releases/tag/v0.1.5
+[0.1.0]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.0
+[0.1.1]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.1
+[0.1.2]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.2
+[0.1.3]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.3
+[0.1.4]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.4
+[0.1.5]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.5

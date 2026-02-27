@@ -4,7 +4,7 @@ version = "0.1.5"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
-repository = "https://github.com/lord007tn/simple-sdm"
+repository = "https://github.com/lord007tn/sdm-clickhouse"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

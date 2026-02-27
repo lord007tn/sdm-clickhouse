@@ -1,6 +1,6 @@
 param(
-  [string]$Version = $(if ($env:SIMPLE_SDM_VERSION) { $env:SIMPLE_SDM_VERSION } else { "latest" }),
-  [string]$Repo = $(if ($env:SIMPLE_SDM_REPO) { $env:SIMPLE_SDM_REPO } else { "lord007tn/simple-sdm" }),
+  [string]$Version = $(if ($env:SDM_CLICKHOUSE_VERSION) { $env:SDM_CLICKHOUSE_VERSION } else { "latest" }),
+  [string]$Repo = $(if ($env:SDM_CLICKHOUSE_REPO) { $env:SDM_CLICKHOUSE_REPO } else { "lord007tn/sdm-clickhouse" }),
   [string]$GitHubToken = $(if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } elseif ($env:GH_TOKEN) { $env:GH_TOKEN } else { "" }),
   [switch]$SystemInstall,
   [switch]$CheckOnly
@@ -166,9 +166,9 @@ function Install-Asset {
       return
     }
     if ($lower.EndsWith(".appimage")) {
-      $targetDir = if ($env:SIMPLE_SDM_APPIMAGE_DIR) { $env:SIMPLE_SDM_APPIMAGE_DIR } else { Join-Path $HOME ".local/bin" }
+      $targetDir = if ($env:SDM_CLICKHOUSE_APPIMAGE_DIR) { $env:SDM_CLICKHOUSE_APPIMAGE_DIR } else { Join-Path $HOME ".local/bin" }
       New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
-      $targetPath = Join-Path $targetDir "simple-sdm.AppImage"
+      $targetPath = Join-Path $targetDir "sdm-clickhouse.AppImage"
       Copy-Item -Force -Path $Path -Destination $targetPath
       & chmod +x $targetPath
       Write-Host "Installed AppImage to $targetPath"
@@ -269,4 +269,4 @@ Write-Host "SHA256 verified."
 
 Install-Asset -Path $tmpPath -AssetName $asset.name -OsName $osName -SystemInstallMode $SystemInstall.IsPresent
 
-Write-Host "Simple SDM installation complete."
+Write-Host "SDM ClickHouse installation complete."

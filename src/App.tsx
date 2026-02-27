@@ -825,7 +825,7 @@ function App() {
   const exportProfiles = async () => {
     const targetPath = await save({
       title: "Export Connection Profiles",
-      defaultPath: "simple-sdm-connections.json",
+      defaultPath: "sdm-clickhouse-connections.json",
       filters: [{ name: "JSON", extensions: ["json"] }],
     });
     if (!targetPath) return;
@@ -866,7 +866,7 @@ function App() {
   const backupMetadata = async () => {
     const targetPath = await save({
       title: "Backup Metadata Database",
-      defaultPath: "simple-sdm-backup.sqlite3",
+      defaultPath: "sdm-clickhouse-backup.sqlite3",
       filters: [{ name: "SQLite", extensions: ["sqlite3", "db"] }],
     });
     if (!targetPath) return;
@@ -1468,7 +1468,7 @@ function App() {
               <Database className="h-3.5 w-3.5 text-primary" />
             </div>
             <span className="text-sm font-semibold tracking-tight">
-              Simple SDM
+              SDM ClickHouse
             </span>
           </div>
           <Button

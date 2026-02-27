@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a reproducible problem in Simple SDM
+about: Report a reproducible problem in SDM ClickHouse
 title: "bug: "
 labels: [bug]
 assignees: []

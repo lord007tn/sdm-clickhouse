@@ -47,12 +47,12 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let dirs = ProjectDirs::from("cc", "SimpleSDM", "SimpleSDM")
+            let dirs = ProjectDirs::from("cc", "SdmClickHouse", "SdmClickHouse")
                 .ok_or_else(|| anyhow::anyhow!("failed to resolve app data directory"))?;
             let data_dir = dirs.data_local_dir().to_path_buf();
             fs::create_dir_all(&data_dir)?;
             set_unix_private_dir(&data_dir)?;
-            let db_path = data_dir.join("simple_sdm.sqlite3");
+            let db_path = data_dir.join("sdm_clickhouse.sqlite3");
             let secrets_path = data_dir.join("secrets_fallback.json");
             if secrets_path.exists() {
                 let _ = set_unix_private_file(&secrets_path);
@@ -61,7 +61,7 @@ pub fn run() {
                 Ok(_) => None,
                 Err(err) => {
                     let backup_path = data_dir.join(format!(
-                        "simple_sdm.sqlite3.corrupt.{}.bak",
+                        "sdm_clickhouse.sqlite3.corrupt.{}.bak",
                         Utc::now().timestamp()
                     ));
                     let _ = fs::rename(&db_path, &backup_path);

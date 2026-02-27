@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Simple SDM",
+  "productName": "SDM ClickHouse",
   "version": "0.1.5",
-  "identifier": "cc.raedb.simple-sdm",
+  "identifier": "cc.raedb.sdm-clickhouse",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Simple SDM",
+        "title": "SDM ClickHouse",
         "width": 1500,
         "height": 940,
         "minWidth": 1160,
@@ -38,7 +38,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/lord007tn/simple-sdm/releases/latest/download/latest.json"
+        "https://github.com/lord007tn/sdm-clickhouse/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEzQzM1QkRGQUVBQzRBNzgKUldSNFNxeXUzMXZERS9LdmpUbmNKQjRENXdIeG82YzBVNVIvVUFWbGt6ZnVySkQ1YmdRNnlJYUkK"
     }

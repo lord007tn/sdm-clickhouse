@@ -23,7 +23,7 @@ use crate::models::{
 };
 use crate::AppState;
 
-const KEYRING_SERVICE: &str = "simple-sdm-clickhouse";
+const KEYRING_SERVICE: &str = "sdm-clickhouse";
 
 fn into_message(err: anyhow::Error) -> String {
     err.to_string()
@@ -327,7 +327,7 @@ fn normalize_repo_string(value: &str) -> Option<String> {
 }
 
 fn resolve_updater_repo() -> String {
-    if let Ok(raw) = std::env::var("SIMPLE_SDM_UPDATER_REPO") {
+    if let Ok(raw) = std::env::var("SDM_CLICKHOUSE_UPDATER_REPO") {
         if let Some(normalized) = normalize_repo_string(&raw) {
             return normalized;
         }
@@ -335,7 +335,7 @@ fn resolve_updater_repo() -> String {
     if let Some(normalized) = normalize_repo_string(env!("CARGO_PKG_REPOSITORY")) {
         return normalized;
     }
-    "lord007tn/simple-sdm".to_string()
+    "lord007tn/sdm-clickhouse".to_string()
 }
 
 fn github_token() -> Option<String> {
@@ -351,7 +351,7 @@ fn github_api_request(url: &str) -> reqwest::RequestBuilder {
     let mut request = client
         .get(url)
         .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", "simple-sdm-updater");
+        .header("User-Agent", "sdm-clickhouse-updater");
     if let Some(token) = github_token() {
         request = request.bearer_auth(token);
     }
@@ -368,7 +368,7 @@ async fn fetch_releases(repo: &str) -> Result<Vec<GithubRelease>, String> {
     if !status.is_success() {
         let guidance = if status.as_u16() == 404 {
             format!(
-                "Repository '{}' was not found. Set SIMPLE_SDM_UPDATER_REPO to a valid owner/repo and provide GITHUB_TOKEN for private repositories.",
+                "Repository '{}' was not found. Set SDM_CLICKHOUSE_UPDATER_REPO to a valid owner/repo and provide GITHUB_TOKEN for private repositories.",
                 repo
             )
         } else if status.as_u16() == 401 || status.as_u16() == 403 {
@@ -1479,7 +1479,7 @@ fn launch_installer(installer_path: &Path) -> anyhow::Result<()> {
             if let Ok(home) = std::env::var("HOME") {
                 let install_dir = PathBuf::from(home).join(".local").join("bin");
                 let _ = fs::create_dir_all(&install_dir);
-                let target = install_dir.join("simple-sdm.AppImage");
+                let target = install_dir.join("sdm-clickhouse.AppImage");
                 fs::copy(installer_path, &target)?;
                 let _ = Command::new("chmod").arg("+x").arg(&target).spawn();
                 let _ = Command::new(&target).spawn();
@@ -1577,7 +1577,7 @@ pub async fn app_install_update(_state: State<'_, AppState>) -> Result<CommandMe
         ));
     }
 
-    let installer_path = std::env::temp_dir().join(format!("simple-sdm-update-{}", safe_name));
+    let installer_path = std::env::temp_dir().join(format!("sdm-clickhouse-update-{}", safe_name));
     fs::write(&installer_path, &bytes).map_err(|err| err.to_string())?;
     launch_installer(&installer_path).map_err(|err| err.to_string())?;
 
