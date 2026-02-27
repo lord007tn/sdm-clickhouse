@@ -64,6 +64,7 @@ Release workflow behavior:
    - `ubuntu-latest` (`deb`, `AppImage`)
    - `windows-latest` (`msi`, `nsis`)
    - `macos-latest` (`dmg`)
+   - no extra desktop package types are emitted
 4. Generate and upload updater manifest `latest.json` via `tauri-action`.
 5. Verify `latest.json` exists on the tagged release.
 

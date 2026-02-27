@@ -40,10 +40,13 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
+            bundles: deb,appimage
           - os: windows-latest
             platform: windows
+            bundles: msi,nsis
           - os: macos-latest
             platform: macos
+            bundles: dmg
 
     steps:
       - name: Checkout
@@ -94,7 +97,7 @@ jobs:
           prerelease: false
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
-          args: ""
+          args: --bundles ${{ matrix.bundles }}
 
   verify-updater-manifest:
     name: Verify latest.json
