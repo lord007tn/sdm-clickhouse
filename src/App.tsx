@@ -6,7 +6,6 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { check } from "@tauri-apps/plugin-updater";
 import { confirm, open, save } from "@tauri-apps/plugin-dialog";
 import {
   Check,
@@ -16,7 +15,6 @@ import {
   Code2,
   Copy,
   Database,
-  Download,
   Loader2,
   Pencil,
   Play,
@@ -39,6 +37,7 @@ import {
   coerceEditedValue,
   parseTableFromSql,
 } from "@/features/query/lib/sql";
+import { UpdateChecker } from "@/components/update-checker/UpdateChecker";
 import { QueryEditor } from "@/features/query/components/QueryEditor";
 import {
   createTab,
@@ -104,12 +103,6 @@ type ConnectionHealth = {
   latencyMs?: number;
 };
 
-type GithubUpdateInfo = {
-  version: string;
-  assetName: string;
-  targetLabel: string;
-};
-
 type OpsAction =
   | "create-db"
   | "drop-db"
@@ -148,7 +141,7 @@ function Skeleton({
   );
 }
 
-const APP_VERSION = "0.1.7";
+const APP_VERSION = "0.1.8";
 
 const baseConnection: ConnectionInput = {
   name: "",
@@ -324,27 +317,6 @@ function App() {
     () => new Map(),
   );
   const [applyingChanges, setApplyingChanges] = useState(false);
-
-  /* ── Updater state ── */
-  const [updater, setUpdater] = useState<{
-    checking: boolean;
-    available: boolean;
-    downloading: boolean;
-    progress: number;
-    version?: string;
-    source?: "tauri" | "github";
-    assetName?: string;
-    downloadUrl?: string;
-    sha256?: string;
-    targetLabel?: string;
-    done: boolean;
-  }>({
-    checking: false,
-    available: false,
-    downloading: false,
-    progress: 0,
-    done: false,
-  });
 
   /* ── Derived ── */
   const activeConnection = useMemo(
@@ -1303,166 +1275,6 @@ function App() {
     toast("Changes discarded");
   };
 
-  /* ── Updater ── */
-  const checkGithubReleaseUpdate =
-    async (): Promise<GithubUpdateInfo | null> => {
-      const result = await api.appCheckUpdate();
-      if (!result.available || !result.latestVersion || !result.assetName) {
-        return null;
-      }
-      return {
-        version: result.latestVersion,
-        assetName: result.assetName,
-        targetLabel: result.target,
-      };
-    };
-
-  const checkForUpdates = async () => {
-    if (!isTauriRuntime) {
-      toast.error("Updater is only available in Tauri runtime.");
-      return;
-    }
-    setUpdater((s) => ({ ...s, checking: true, done: false }));
-    try {
-      const update = await check();
-      if (!update) {
-        toast.success("You're on the latest version!");
-        setUpdater((s) => ({
-          ...s,
-          checking: false,
-          available: false,
-          source: undefined,
-          assetName: undefined,
-          downloadUrl: undefined,
-          sha256: undefined,
-          targetLabel: undefined,
-        }));
-        return;
-      }
-      setUpdater((s) => ({
-        ...s,
-        checking: false,
-        available: true,
-        version: update.version,
-        source: "tauri",
-        assetName: undefined,
-        downloadUrl: undefined,
-        sha256: undefined,
-        targetLabel: undefined,
-      }));
-      toast.success(`Update v${update.version} available.`);
-    } catch (error) {
-      try {
-        const githubUpdate = await checkGithubReleaseUpdate();
-        if (!githubUpdate) {
-          setUpdater((s) => ({
-            ...s,
-            checking: false,
-            available: false,
-            source: undefined,
-            assetName: undefined,
-            downloadUrl: undefined,
-            sha256: undefined,
-            targetLabel: undefined,
-          }));
-          const primary = String(error).toLowerCase();
-          if (
-            primary.includes("does not have any endpoints set") ||
-            primary.includes("404")
-          ) {
-            toast("Update channel is not configured for this build yet.");
-          } else {
-            toast.success("You're on the latest version!");
-          }
-          return;
-        }
-        setUpdater((s) => ({
-          ...s,
-          checking: false,
-          available: true,
-          version: githubUpdate.version,
-          source: "github",
-          assetName: githubUpdate.assetName,
-          downloadUrl: undefined,
-          sha256: undefined,
-          targetLabel: githubUpdate.targetLabel,
-        }));
-        toast.success(
-          `Update v${githubUpdate.version} available for ${githubUpdate.targetLabel}.`,
-        );
-      } catch (fallbackError) {
-        setUpdater((s) => ({ ...s, checking: false }));
-        toast.error(
-          `Update check failed: ${String(error)} | ${String(fallbackError)}`,
-        );
-      }
-    }
-  };
-
-  const downloadUpdate = async () => {
-    if (!isTauriRuntime) return;
-    setUpdater((s) => ({ ...s, downloading: true, progress: 0 }));
-    try {
-      if (updater.source === "github" && updater.assetName) {
-        const response = await api.appInstallUpdate();
-        setUpdater((s) => ({
-          ...s,
-          downloading: false,
-          done: true,
-          progress: 100,
-          available: false,
-        }));
-        toast.success(response.message);
-        return;
-      }
-
-      const update = await check();
-      if (!update) {
-        setUpdater((s) => ({ ...s, downloading: false, progress: 0 }));
-        return;
-      }
-      let totalSize = 0;
-      let downloaded = 0;
-      await update.downloadAndInstall((event) => {
-        if (event.event === "Started") {
-          totalSize =
-            (event.data as { contentLength?: number }).contentLength ?? 0;
-        } else if (event.event === "Progress") {
-          downloaded +=
-            (event.data as { chunkLength?: number }).chunkLength ?? 0;
-          const pct =
-            totalSize > 0 ? Math.round((downloaded / totalSize) * 100) : 0;
-          setUpdater((s) => ({ ...s, progress: pct }));
-        } else if (event.event === "Finished") {
-          setUpdater((s) => ({
-            ...s,
-            downloading: false,
-            done: true,
-            progress: 100,
-          }));
-        }
-      });
-
-      try {
-        await api.appRequestRestart();
-        return;
-      } catch (restartError) {
-        setUpdater((s) => ({
-          ...s,
-          done: true,
-          downloading: false,
-          progress: 100,
-        }));
-        toast.success(
-          `Update installed. Restart to finish: ${String(restartError)}`,
-        );
-      }
-    } catch (error) {
-      setUpdater((s) => ({ ...s, downloading: false }));
-      toast.error(`Update failed: ${String(error)}`);
-    }
-  };
-
   /* ════════════════════════════ RENDER ════════════════════════════ */
 
   return (
@@ -1865,55 +1677,7 @@ function App() {
 
         {/* Sidebar footer: version & updates */}
         <div className="border-t border-border/50 px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground/50">
-              v{APP_VERSION}
-            </span>
-            {updater.done ? (
-              <span className="text-[10px] font-medium text-emerald-400">
-                Update ready — restart app
-              </span>
-            ) : updater.downloading ? (
-              <div className="flex flex-1 items-center gap-2">
-                <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-muted/40">
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-full bg-primary transition-all duration-300"
-                    style={{ width: `${updater.progress}%` }}
-                  />
-                </div>
-                <span className="text-[10px] tabular-nums text-muted-foreground">
-                  {updater.progress}%
-                </span>
-              </div>
-            ) : updater.available ? (
-              <button
-                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/10"
-                onClick={() => void downloadUpdate()}
-                aria-label={`Install update version ${updater.version}`}
-                title={
-                  updater.source === "github"
-                    ? `Install ${updater.assetName ?? "release asset"} (${updater.targetLabel ?? "runtime"})`
-                    : "Download and install update"
-                }
-              >
-                <Download className="h-3 w-3" />v{updater.version}
-              </button>
-            ) : (
-              <button
-                className="rounded-md p-0.5 text-muted-foreground/40 hover:text-muted-foreground"
-                onClick={() => void checkForUpdates()}
-                disabled={updater.checking}
-                title="Check for updates"
-                aria-label="Check for updates"
-              >
-                {updater.checking ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3 w-3" />
-                )}
-              </button>
-            )}
-          </div>
+          <UpdateChecker isTauriRuntime={isTauriRuntime} appVersion={APP_VERSION} />
           <div className="mt-2 flex flex-wrap gap-1">
             <Button
               size="sm"

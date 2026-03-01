@@ -143,6 +143,8 @@ export const api = {
 
   appStartupStatus: () => tauriInvoke<string | null>("app_startup_status"),
 
+  triggerUpdateCheck: () => tauriInvoke<void>("trigger_update_check"),
+
   appRequestRestart: () => tauriInvoke<CommandMessage>("app_request_restart"),
 
   appCheckUpdate: () => tauriInvoke<UpdateCheckResult>("app_check_update"),

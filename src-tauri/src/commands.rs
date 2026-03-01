@@ -7,7 +7,7 @@ use keyring::Entry;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use serde_json::Value;
-use tauri::State;
+use tauri::{Emitter, State};
 use uuid::Uuid;
 
 use crate::clickhouse::{
@@ -1446,6 +1446,11 @@ pub fn app_request_restart(app: tauri::AppHandle) -> Result<CommandMessage, Stri
     Ok(CommandMessage {
         message: "Restart requested to finish update.".to_string(),
     })
+}
+
+#[tauri::command]
+pub fn trigger_update_check(app: tauri::AppHandle) -> Result<(), String> {
+    app.emit("check-for-updates", ()).map_err(|err| err.to_string())
 }
 
 #[tauri::command]

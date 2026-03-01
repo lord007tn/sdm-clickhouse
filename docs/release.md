@@ -27,9 +27,9 @@ Artifacts are generated under:
 ## Auto Update Integration
 
 - The app includes `tauri-plugin-updater` (Rust + JS).
-- UI exposes a "Updates" action in the top toolbar.
-- Fallback updater path resolves the latest GitHub release for the current OS/arch, verifies SHA256, and launches the installer.
-- Built-in updater flow requests restart automatically after successful install.
+- `UpdateChecker` runs on startup, checks for updates automatically, and listens to backend `check-for-updates` events.
+- The sidebar footer shows update state (`checking`, `available`, `downloading`, `installed`) with a live progress bar during download.
+- Built-in updater flow uses `downloadAndInstall()` and relaunches automatically after successful install.
 - To enable production updates, configure:
   - release artifact hosting
   - updater endpoint manifest

@@ -1,6 +1,6 @@
 [package]
 name = "tauri-app"
-version = "0.1.7"
+version = "0.1.8"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -33,3 +33,4 @@ thiserror = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 sha2 = "0.10"
 tauri-plugin-dialog = "2.6.0"
+tauri-plugin-process = "2"
