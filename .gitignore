@@ -25,6 +25,12 @@ test-results
 .playwright-cli/
 screenshot*.png
 skills-lock.json
+.codex-tauri-smoke.ps1
+.dogfood-manual.ps1
+.tmp-dogfood-flow*.ps1
+run-dogfood.ps1
+p.out
+p.err
 
 # Editor directories and files
 .vscode/*

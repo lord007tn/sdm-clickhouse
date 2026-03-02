@@ -141,7 +141,7 @@ function Skeleton({
   );
 }
 
-const APP_VERSION = "0.1.10";
+const APP_VERSION = "0.1.11";
 
 const baseConnection: ConnectionInput = {
   name: "",
