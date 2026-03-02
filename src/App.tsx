@@ -585,6 +585,17 @@ function App() {
     }
   }, [activeTab?.result?.queryId, activeTabId]);
 
+  // Defensive guard: if a modal focus trap fails to clean up, pointer-events can
+  // remain disabled on body and make the entire UI appear frozen.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const hasOpenDialog =
+      snippetDialogOpen || opsDialogOpen || connectionDialogOpen;
+    if (!hasOpenDialog && document.body.style.pointerEvents === "none") {
+      document.body.style.pointerEvents = "";
+    }
+  }, [snippetDialogOpen, opsDialogOpen, connectionDialogOpen]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
