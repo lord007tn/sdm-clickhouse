@@ -33,12 +33,17 @@ export function UpdateChecker({
   });
 
   const mountedRef = useRef(true);
+  const checkingRef = useRef(false);
 
   useEffect(() => {
     return () => {
       mountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    checkingRef.current = updater.checking;
+  }, [updater.checking]);
 
   const checkForUpdates = useCallback(
     async (manual: boolean) => {
@@ -107,6 +112,11 @@ export function UpdateChecker({
     }
     try {
       await api.triggerUpdateCheck();
+      // Fallback in case backend event wiring is unavailable at runtime.
+      window.setTimeout(() => {
+        if (!mountedRef.current || checkingRef.current) return;
+        void checkForUpdates(true);
+      }, 1200);
     } catch {
       await checkForUpdates(true);
     }
@@ -193,17 +203,28 @@ export function UpdateChecker({
   useEffect(() => {
     if (!isTauriRuntime) return;
 
+    let disposed = false;
     let unlisten: (() => void) | undefined;
 
     void checkForUpdates(false);
 
     void (async () => {
-      unlisten = await listen("check-for-updates", () => {
-        void checkForUpdates(true);
-      });
+      try {
+        const cleanup = await listen("check-for-updates", () => {
+          void checkForUpdates(true);
+        });
+        if (disposed) {
+          cleanup();
+          return;
+        }
+        unlisten = cleanup;
+      } catch {
+        // Keep checker functional even if event listener setup fails.
+      }
     })();
 
     return () => {
+      disposed = true;
       if (unlisten) {
         unlisten();
       }

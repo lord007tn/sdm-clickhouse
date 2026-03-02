@@ -10,6 +10,25 @@ test("renders browser preview shell", async ({ page }) => {
   await expect(page.getByText("SDM ClickHouse")).toBeVisible();
 });
 
+test("browser preview guardrails stay interactive", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Check for updates" }).click();
+  await expect(
+    page.getByText("Updater is only available in Tauri runtime."),
+  ).toBeVisible();
+
+  const addConnectionButton = page
+    .locator("main")
+    .getByRole("button", { name: "Add Connection" });
+  await expect(addConnectionButton).toBeVisible();
+  await expect(addConnectionButton).toBeEnabled();
+
+  await expect(
+    page.getByRole("heading", { name: "No Connections" }),
+  ).toBeVisible();
+});
+
 test("renders query workspace with mocked tauri bridge and codemirror editor", async ({
   page,
 }) => {
