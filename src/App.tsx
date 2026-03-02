@@ -141,8 +141,16 @@ function Skeleton({
   );
 }
 
-const APP_VERSION = "0.1.14";
+const APP_VERSION = "0.1.15";
 const SNIPPET_SAVE_TIMEOUT_MS = 15_000;
+
+function deferUiTransition(callback: () => void) {
+  if (typeof window === "undefined") {
+    callback();
+    return;
+  }
+  window.setTimeout(callback, 0);
+}
 
 const baseConnection: ConnectionInput = {
   name: "",
@@ -590,37 +598,32 @@ function App() {
   // remain disabled and make the UI appear frozen.
   useEffect(() => {
     if (typeof document === "undefined") return;
-    const clearStaleInteractionLock = () => {
-      const hasOpenDialog =
-        snippetDialogOpen || opsDialogOpen || connectionDialogOpen;
-      const hasMountedOpenDialog = Boolean(
-        document.querySelector('[role="dialog"][data-state="open"]'),
-      );
-      if (hasOpenDialog || hasMountedOpenDialog) return;
-      if (document.body.style.pointerEvents === "none") {
-        document.body.style.pointerEvents = "";
-      }
-      if (document.documentElement.style.pointerEvents === "none") {
-        document.documentElement.style.pointerEvents = "";
-      }
-    };
+    const hasOpenDialog =
+      snippetDialogOpen || opsDialogOpen || connectionDialogOpen;
+    const hasMountedOpenDialog = Boolean(
+      document.querySelector('[role="dialog"][data-state="open"]'),
+    );
+    if (hasOpenDialog || hasMountedOpenDialog) return;
 
-    clearStaleInteractionLock();
-    const timer = window.setInterval(clearStaleInteractionLock, 600);
-    const observer = new MutationObserver(clearStaleInteractionLock);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["style"],
-    });
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["style"],
-    });
-
-    return () => {
-      window.clearInterval(timer);
-      observer.disconnect();
-    };
+    if (document.body.style.pointerEvents === "none") {
+      document.body.style.pointerEvents = "";
+    }
+    if (document.documentElement.style.pointerEvents === "none") {
+      document.documentElement.style.pointerEvents = "";
+    }
+    if (document.body.hasAttribute("inert")) {
+      document.body.removeAttribute("inert");
+    }
+    if (document.documentElement.hasAttribute("inert")) {
+      document.documentElement.removeAttribute("inert");
+    }
+    const root = document.getElementById("root");
+    if (root?.style.pointerEvents === "none") {
+      root.style.pointerEvents = "";
+    }
+    if (root?.hasAttribute("inert")) {
+      root.removeAttribute("inert");
+    }
   }, [snippetDialogOpen, opsDialogOpen, connectionDialogOpen]);
 
   // Keyboard shortcuts
@@ -800,7 +803,7 @@ function App() {
     }
     if (!activeTab || !activeConnectionId) return;
     setSnippetName("");
-    setSnippetDialogOpen(true);
+    deferUiTransition(() => setSnippetDialogOpen(true));
   };
 
   const saveSnippet = async () => {
@@ -947,7 +950,7 @@ function App() {
       table: selectedTable?.name ?? "",
     });
     setOpsPreviewCount(null);
-    setOpsDialogOpen(true);
+    deferUiTransition(() => setOpsDialogOpen(true));
   };
 
   const runOperation = async () => {
@@ -1137,38 +1140,59 @@ function App() {
   };
 
   const openAddDialog = () => {
-    setConnectionDraft({ ...baseConnection });
-    setShowCaCertPath(false);
-    setShowSshTunnel(false);
-    setDiagnostics(null);
-    setConnectionDialogOpen(true);
+    deferUiTransition(() => {
+      setConnectionDraft({
+        ...baseConnection,
+        sshTunnel: {
+          enabled: baseConnection.sshTunnel?.enabled ?? false,
+          host: baseConnection.sshTunnel?.host ?? "",
+          port: baseConnection.sshTunnel?.port ?? 22,
+          username: baseConnection.sshTunnel?.username ?? "",
+          localPort: baseConnection.sshTunnel?.localPort ?? 8123,
+        },
+      });
+      setShowCaCertPath(false);
+      setShowSshTunnel(false);
+      setDiagnostics(null);
+      setConnectionDialogOpen(true);
+    });
   };
 
   const openEditDialog = (connection: ConnectionProfile) => {
-    setConnectionDraft({
-      id: connection.id,
-      name: connection.name,
-      host: connection.host,
-      port: connection.port,
-      database: connection.database,
-      username: connection.username,
-      secure: connection.secure,
-      tlsInsecureSkipVerify: connection.tlsInsecureSkipVerify ?? false,
-      caCertPath: connection.caCertPath ?? "",
-      sshTunnel: connection.sshTunnel ?? {
-        enabled: false,
-        host: "",
-        port: 22,
-        username: "",
-        localPort: 8123,
-      },
-      timeoutMs: connection.timeoutMs,
-      password: "",
+    deferUiTransition(() => {
+      setConnectionDraft({
+        id: connection.id,
+        name: connection.name,
+        host: connection.host,
+        port: connection.port,
+        database: connection.database,
+        username: connection.username,
+        secure: connection.secure,
+        tlsInsecureSkipVerify: connection.tlsInsecureSkipVerify ?? false,
+        caCertPath: connection.caCertPath ?? "",
+        sshTunnel: connection.sshTunnel
+          ? {
+              enabled: connection.sshTunnel.enabled ?? false,
+              host: connection.sshTunnel.host ?? "",
+              port: connection.sshTunnel.port ?? 22,
+              username: connection.sshTunnel.username ?? "",
+              localPort: connection.sshTunnel.localPort ?? 8123,
+            }
+          : {
+              enabled: false,
+              host: "",
+              port: 22,
+              username: "",
+              localPort: 8123,
+            },
+        timeoutMs: connection.timeoutMs,
+        password: "",
+      });
+      setShowCaCertPath(Boolean(connection.caCertPath));
+      setShowSshTunnel(Boolean(connection.sshTunnel?.enabled));
+      setDiagnostics(null);
+      setConnectionDialogOpen(true);
     });
-    setShowCaCertPath(Boolean(connection.caCertPath));
-    setShowSshTunnel(Boolean(connection.sshTunnel?.enabled));
-    setDiagnostics(null);
-    setConnectionDialogOpen(true);
   };
 
   /* ── Pending changes system ── */
@@ -2565,7 +2589,6 @@ function App() {
 
       {/* ── Save Snippet Dialog ── */}
       <Dialog
-        modal={false}
         open={snippetDialogOpen}
         onOpenChange={(open) => {
           setSnippetDialogOpen(open);
@@ -2630,7 +2653,6 @@ function App() {
 
       {/* ── Operations Dialog ── */}
       <Dialog
-        modal={false}
         open={opsDialogOpen}
         onOpenChange={(open) => {
           setOpsDialogOpen(open);

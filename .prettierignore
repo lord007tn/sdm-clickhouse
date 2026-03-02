@@ -4,3 +4,6 @@ src-tauri/target
 src-tauri/target-validation
 src-tauri/tauri.validation.conf.json
 test-results
+.tmp*
+_tmp*
+dogfood-repro.ps1

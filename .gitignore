@@ -20,6 +20,8 @@ test-results
 .tmp/*.pid
 .tmp/*.result
 .tmp/
+.tmp*
+_tmp*
 .agents/
 .claude/
 .playwright-cli/
@@ -29,6 +31,7 @@ skills-lock.json
 .dogfood-manual.ps1
 .tmp-dogfood-flow*.ps1
 run-dogfood.ps1
+dogfood-repro.ps1
 p.out
 p.err
 
