@@ -45,13 +45,58 @@ jobs:
         run: |
           set -euo pipefail
           api="https://api.github.com/repos/${REPO}/commits/${SHA}/check-runs?per_page=100"
-          payload="$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "${api}")"
-          for required in "Web Quality" "Rust Check (Tauri)"; do
-            ok_count="$(echo "${payload}" | jq --arg required "${required}" '[.check_runs[] | select(.name == $required and .status == "completed" and .conclusion == "success")] | length')"
-            if [ "${ok_count}" -lt 1 ]; then
-              echo "Required check '${required}' is missing or not successful for ${SHA}."
+          required_checks=("Web Quality" "Rust Check (Tauri)")
+          timeout_seconds=$((30 * 60))
+          poll_interval_seconds=20
+          deadline=$((SECONDS + timeout_seconds))
+
+          while true; do
+            payload="$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "${api}")"
+            pending=0
+            failed=0
+
+            echo "Current checks for ${SHA}:"
+            echo "${payload}" | jq -r '.check_runs[] | "- \(.name): status=\(.status), conclusion=\(.conclusion // "null")"'
+
+            for required in "${required_checks[@]}"; do
+              ok_count="$(echo "${payload}" | jq --arg required "${required}" '[.check_runs[] | select(.name == $required and .status == "completed" and .conclusion == "success")] | length')"
+              fail_count="$(echo "${payload}" | jq --arg required "${required}" '[.check_runs[] | select(.name == $required and .status == "completed" and (.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled" or .conclusion == "action_required" or .conclusion == "startup_failure"))] | length')"
+              run_count="$(echo "${payload}" | jq --arg required "${required}" '[.check_runs[] | select(.name == $required)] | length')"
+
+              if [ "${ok_count}" -gt 0 ]; then
+                continue
+              fi
+
+              if [ "${fail_count}" -gt 0 ]; then
+                echo "Required check '${required}' completed but did not succeed for ${SHA}."
+                failed=1
+                continue
+              fi
+
+              if [ "${run_count}" -eq 0 ]; then
+                echo "Required check '${required}' has not started yet for ${SHA}."
+              else
+                echo "Required check '${required}' is still running for ${SHA}."
+              fi
+              pending=1
+            done
+
+            if [ "${failed}" -eq 1 ]; then
               exit 1
             fi
+
+            if [ "${pending}" -eq 0 ]; then
+              echo "All required checks succeeded for ${SHA}."
+              break
+            fi
+
+            if [ "${SECONDS}" -ge "${deadline}" ]; then
+              echo "Timed out waiting for required checks to complete successfully for ${SHA}."
+              exit 1
+            fi
+
+            echo "Waiting ${poll_interval_seconds}s for required checks..."
+            sleep "${poll_interval_seconds}"
           done
 
   changelog:
