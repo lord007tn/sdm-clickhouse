@@ -141,7 +141,8 @@ function Skeleton({
   );
 }
 
-const APP_VERSION = "0.1.13";
+const APP_VERSION = "0.1.14";
+const SNIPPET_SAVE_TIMEOUT_MS = 15_000;
 
 const baseConnection: ConnectionInput = {
   name: "",
@@ -585,15 +586,41 @@ function App() {
     }
   }, [activeTab?.result?.queryId, activeTabId]);
 
-  // Defensive guard: if a modal focus trap fails to clean up, pointer-events can
-  // remain disabled on body and make the entire UI appear frozen.
+  // Defensive guard: if dialog focus-lock cleanup fails, pointer-events can
+  // remain disabled and make the UI appear frozen.
   useEffect(() => {
     if (typeof document === "undefined") return;
-    const hasOpenDialog =
-      snippetDialogOpen || opsDialogOpen || connectionDialogOpen;
-    if (!hasOpenDialog && document.body.style.pointerEvents === "none") {
-      document.body.style.pointerEvents = "";
-    }
+    const clearStaleInteractionLock = () => {
+      const hasOpenDialog =
+        snippetDialogOpen || opsDialogOpen || connectionDialogOpen;
+      const hasMountedOpenDialog = Boolean(
+        document.querySelector('[role="dialog"][data-state="open"]'),
+      );
+      if (hasOpenDialog || hasMountedOpenDialog) return;
+      if (document.body.style.pointerEvents === "none") {
+        document.body.style.pointerEvents = "";
+      }
+      if (document.documentElement.style.pointerEvents === "none") {
+        document.documentElement.style.pointerEvents = "";
+      }
+    };
+
+    clearStaleInteractionLock();
+    const timer = window.setInterval(clearStaleInteractionLock, 600);
+    const observer = new MutationObserver(clearStaleInteractionLock);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+
+    return () => {
+      window.clearInterval(timer);
+      observer.disconnect();
+    };
   }, [snippetDialogOpen, opsDialogOpen, connectionDialogOpen]);
 
   // Keyboard shortcuts
@@ -781,13 +808,21 @@ function App() {
     const name = snippetName.trim();
     if (!name) return;
     setSavingSnippet(true);
+    let timeoutId: number | undefined;
     try {
-      await api.snippetSave({
-        name,
-        sql: activeTab.sql,
-        connectionId: activeConnectionId,
-        tags: ["manual"],
-      });
+      await Promise.race([
+        api.snippetSave({
+          name,
+          sql: activeTab.sql,
+          connectionId: activeConnectionId,
+          tags: ["manual"],
+        }),
+        new Promise<never>((_, reject) => {
+          timeoutId = window.setTimeout(() => {
+            reject(new Error("Snippet save timed out. Please try again."));
+          }, SNIPPET_SAVE_TIMEOUT_MS);
+        }),
+      ]);
       toast.success("Snippet saved.");
       setSnippetDialogOpen(false);
       setSnippetName("");
@@ -795,6 +830,9 @@ function App() {
     } catch (error) {
       toast.error(String(error));
     } finally {
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
       setSavingSnippet(false);
     }
   };
@@ -1202,83 +1240,86 @@ function App() {
     }
 
     setApplyingChanges(true);
-    let editCount = 0;
-    let deleteCount = 0;
-    let errorCount = 0;
+    try {
+      let editCount = 0;
+      let deleteCount = 0;
+      let errorCount = 0;
 
-    // Group edits by row (skip rows that will be deleted)
-    const editsByRow = new Map<number, Record<string, unknown>>();
-    for (const [, edit] of pendingEdits) {
-      if (pendingDeletes.has(edit.rowIdx)) continue;
-      if (!editsByRow.has(edit.rowIdx)) editsByRow.set(edit.rowIdx, {});
-      editsByRow.get(edit.rowIdx)![edit.col] = edit.newValue;
-    }
-
-    // Apply edits
-    for (const [rowIdx, setValues] of editsByRow) {
-      const row = activeTab.result.rows[rowIdx];
-      if (!row) continue;
-      try {
-        const whereClause = buildWhereClause(
-          row as Record<string, unknown>,
-          activeTab.result.columns,
-        );
-        await api.updateRowsExecute({
-          connectionId: activeConnectionId,
-          database: parsed.database,
-          table: parsed.table,
-          whereClause,
-          setValues,
-          confirmToken: "UPDATE",
-        });
-        editCount++;
-      } catch (error) {
-        toast.error(`Row ${rowIdx + 1} edit failed: ${String(error)}`);
-        errorCount++;
+      // Group edits by row (skip rows that will be deleted)
+      const editsByRow = new Map<number, Record<string, unknown>>();
+      for (const [, edit] of pendingEdits) {
+        if (pendingDeletes.has(edit.rowIdx)) continue;
+        if (!editsByRow.has(edit.rowIdx)) editsByRow.set(edit.rowIdx, {});
+        editsByRow.get(edit.rowIdx)![edit.col] = edit.newValue;
       }
-    }
 
-    // Apply deletes
-    for (const rowIdx of pendingDeletes) {
-      const row = activeTab.result.rows[rowIdx];
-      if (!row) continue;
-      try {
-        const whereClause = buildWhereClause(
-          row as Record<string, unknown>,
-          activeTab.result.columns,
-        );
-        await api.deleteRowsExecute({
-          connectionId: activeConnectionId,
-          database: parsed.database,
-          table: parsed.table,
-          whereClause,
-          confirmToken: "DELETE",
-        });
-        deleteCount++;
-      } catch (error) {
-        toast.error(`Row ${rowIdx + 1} delete failed: ${String(error)}`);
-        errorCount++;
+      // Apply edits
+      for (const [rowIdx, setValues] of editsByRow) {
+        const row = activeTab.result.rows[rowIdx];
+        if (!row) continue;
+        try {
+          const whereClause = buildWhereClause(
+            row as Record<string, unknown>,
+            activeTab.result.columns,
+          );
+          await api.updateRowsExecute({
+            connectionId: activeConnectionId,
+            database: parsed.database,
+            table: parsed.table,
+            whereClause,
+            setValues,
+            confirmToken: "UPDATE",
+          });
+          editCount++;
+        } catch (error) {
+          toast.error(`Row ${rowIdx + 1} edit failed: ${String(error)}`);
+          errorCount++;
+        }
       }
+
+      // Apply deletes
+      for (const rowIdx of pendingDeletes) {
+        const row = activeTab.result.rows[rowIdx];
+        if (!row) continue;
+        try {
+          const whereClause = buildWhereClause(
+            row as Record<string, unknown>,
+            activeTab.result.columns,
+          );
+          await api.deleteRowsExecute({
+            connectionId: activeConnectionId,
+            database: parsed.database,
+            table: parsed.table,
+            whereClause,
+            confirmToken: "DELETE",
+          });
+          deleteCount++;
+        } catch (error) {
+          toast.error(`Row ${rowIdx + 1} delete failed: ${String(error)}`);
+          errorCount++;
+        }
+      }
+
+      // Summary
+      const parts: string[] = [];
+      if (editCount > 0)
+        parts.push(`${editCount} edit${editCount > 1 ? "s" : ""}`);
+      if (deleteCount > 0)
+        parts.push(`${deleteCount} deletion${deleteCount > 1 ? "s" : ""}`);
+      if (errorCount > 0)
+        parts.push(`${errorCount} error${errorCount > 1 ? "s" : ""}`);
+
+      if (errorCount > 0) {
+        toast.error(`Applied with errors: ${parts.join(", ")}`);
+      } else if (parts.length > 0) {
+        toast.success(`Applied: ${parts.join(", ")}`);
+      }
+
+      clearPendingState();
+      void runQuery(activeTab.page);
+    } finally {
+      setApplyingChanges(false);
     }
-
-    // Summary
-    const parts: string[] = [];
-    if (editCount > 0)
-      parts.push(`${editCount} edit${editCount > 1 ? "s" : ""}`);
-    if (deleteCount > 0)
-      parts.push(`${deleteCount} deletion${deleteCount > 1 ? "s" : ""}`);
-    if (errorCount > 0)
-      parts.push(`${errorCount} error${errorCount > 1 ? "s" : ""}`);
-
-    if (errorCount > 0) {
-      toast.error(`Applied with errors: ${parts.join(", ")}`);
-    } else if (parts.length > 0) {
-      toast.success(`Applied: ${parts.join(", ")}`);
-    }
-
-    clearPendingState();
-    setApplyingChanges(false);
-    void runQuery(activeTab.page);
   };
 
   const discardChanges = () => {
@@ -2524,9 +2565,9 @@ function App() {
 
       {/* ── Save Snippet Dialog ── */}
       <Dialog
+        modal={false}
         open={snippetDialogOpen}
         onOpenChange={(open) => {
-          if (savingSnippet) return;
           setSnippetDialogOpen(open);
           if (!open) {
             setSnippetName("");
@@ -2570,7 +2611,6 @@ function App() {
                 type="button"
                 variant="outline"
                 onClick={() => setSnippetDialogOpen(false)}
-                disabled={savingSnippet}
               >
                 Cancel
               </Button>
@@ -2590,6 +2630,7 @@ function App() {
 
       {/* ── Operations Dialog ── */}
       <Dialog
+        modal={false}
         open={opsDialogOpen}
         onOpenChange={(open) => {
           setOpsDialogOpen(open);
@@ -2855,6 +2896,7 @@ function App() {
 
       {/* ── Connection Dialog ── */}
       <Dialog
+        modal={false}
         open={connectionDialogOpen}
         onOpenChange={setConnectionDialogOpen}
       >
