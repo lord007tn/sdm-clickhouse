@@ -1677,7 +1677,10 @@ function App() {
 
         {/* Sidebar footer: version & updates */}
         <div className="border-t border-border/50 px-4 py-2.5">
-          <UpdateChecker isTauriRuntime={isTauriRuntime} appVersion={APP_VERSION} />
+          <UpdateChecker
+            isTauriRuntime={isTauriRuntime}
+            appVersion={APP_VERSION}
+          />
           <div className="mt-2 flex flex-wrap gap-1">
             <Button
               size="sm"

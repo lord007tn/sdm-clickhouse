@@ -20,7 +20,10 @@ type UpdaterState = {
   done: boolean;
 };
 
-export function UpdateChecker({ isTauriRuntime, appVersion }: UpdateCheckerProps) {
+export function UpdateChecker({
+  isTauriRuntime,
+  appVersion,
+}: UpdateCheckerProps) {
   const [updater, setUpdater] = useState<UpdaterState>({
     checking: false,
     available: false,
@@ -152,9 +155,12 @@ export function UpdateChecker({ isTauriRuntime, appVersion }: UpdateCheckerProps
         }
 
         if (event.event === "Progress") {
-          downloaded += (event.data as { chunkLength?: number }).chunkLength ?? 0;
+          downloaded +=
+            (event.data as { chunkLength?: number }).chunkLength ?? 0;
           const progress =
-            contentLength > 0 ? Math.round((downloaded / contentLength) * 100) : 0;
+            contentLength > 0
+              ? Math.round((downloaded / contentLength) * 100)
+              : 0;
           setUpdater((current) => ({
             ...current,
             progress,
@@ -206,7 +212,9 @@ export function UpdateChecker({ isTauriRuntime, appVersion }: UpdateCheckerProps
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[10px] text-muted-foreground/50">v{appVersion}</span>
+      <span className="text-[10px] text-muted-foreground/50">
+        v{appVersion}
+      </span>
       {updater.done ? (
         <span className="text-[10px] font-medium text-emerald-400">
           Update installed
