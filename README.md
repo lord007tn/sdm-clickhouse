@@ -119,7 +119,7 @@ cargo check --manifest-path src-tauri/Cargo.toml
 3. Publish Windows portable ZIP asset (`sdm-clickhouse_<tag>_<arch>_portable.zip`) on the same tag
 4. Publish updater manifest `latest.json` to release assets
 
-- In-app updater flow auto-checks on app start, supports backend-triggered checks (`check-for-updates`), and shows download progress in the sidebar footer.
+- In-app updater flow supports manual and backend-triggered checks (`check-for-updates`) and shows download progress in the sidebar footer.
 - Built-in updater path uses `downloadAndInstall()` and relaunches the app after a successful install.
 
 ## Documentation

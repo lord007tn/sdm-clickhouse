@@ -206,8 +206,6 @@ export function UpdateChecker({
     let disposed = false;
     let unlisten: (() => void) | undefined;
 
-    void checkForUpdates(false);
-
     void (async () => {
       try {
         const cleanup = await listen("check-for-updates", () => {

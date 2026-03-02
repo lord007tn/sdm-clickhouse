@@ -27,7 +27,7 @@ Artifacts are generated under:
 ## Auto Update Integration
 
 - The app includes `tauri-plugin-updater` (Rust + JS).
-- `UpdateChecker` runs on startup, checks for updates automatically, and listens to backend `check-for-updates` events.
+- `UpdateChecker` listens to backend `check-for-updates` events and also supports manual checks from the footer action.
 - The sidebar footer shows update state (`checking`, `available`, `downloading`, `installed`) with a live progress bar during download.
 - Built-in updater flow uses `downloadAndInstall()` and relaunches automatically after successful install.
 - To enable production updates, configure:
