@@ -12,6 +12,6 @@ test("opens add connection dialog from empty-state action", async ({
     .first();
   await expect(emptyStateAddButton).toBeVisible();
   await expect(emptyStateAddButton).toBeEnabled();
-  await emptyStateAddButton.click({ timeout: 4000 });
+  await emptyStateAddButton.click();
   await expect(page.getByRole("dialog")).toBeVisible();
 });
