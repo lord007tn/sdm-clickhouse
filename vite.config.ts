@@ -40,14 +40,11 @@ export default defineConfig(async () => ({
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
-          if (id.includes("react") || id.includes("scheduler")) {
-            return "vendor-react";
-          }
           if (id.includes("@tauri-apps")) {
             return "vendor-tauri";
           }
           if (
-            id.includes("@radix-ui") ||
+            id.includes("@base-ui") ||
             id.includes("lucide-react") ||
             id.includes("sonner")
           ) {
@@ -55,6 +52,9 @@ export default defineConfig(async () => ({
           }
           if (id.includes("@tanstack/react-query")) {
             return "vendor-query";
+          }
+          if (id.includes("react") || id.includes("scheduler")) {
+            return "vendor-react";
           }
           return undefined;
         },

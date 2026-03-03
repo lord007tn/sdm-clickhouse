@@ -144,14 +144,6 @@ function Skeleton({
 const APP_VERSION = "0.1.15";
 const SNIPPET_SAVE_TIMEOUT_MS = 15_000;
 
-function deferUiTransition(callback: () => void) {
-  if (typeof window === "undefined") {
-    callback();
-    return;
-  }
-  window.setTimeout(callback, 0);
-}
-
 const baseConnection: ConnectionInput = {
   name: "",
   host: "localhost",
@@ -594,38 +586,6 @@ function App() {
     }
   }, [activeTab?.result?.queryId, activeTabId]);
 
-  // Defensive guard: if dialog focus-lock cleanup fails, pointer-events can
-  // remain disabled and make the UI appear frozen.
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const hasOpenDialog =
-      snippetDialogOpen || opsDialogOpen || connectionDialogOpen;
-    const hasMountedOpenDialog = Boolean(
-      document.querySelector('[role="dialog"][data-state="open"]'),
-    );
-    if (hasOpenDialog || hasMountedOpenDialog) return;
-
-    if (document.body.style.pointerEvents === "none") {
-      document.body.style.pointerEvents = "";
-    }
-    if (document.documentElement.style.pointerEvents === "none") {
-      document.documentElement.style.pointerEvents = "";
-    }
-    if (document.body.hasAttribute("inert")) {
-      document.body.removeAttribute("inert");
-    }
-    if (document.documentElement.hasAttribute("inert")) {
-      document.documentElement.removeAttribute("inert");
-    }
-    const root = document.getElementById("root");
-    if (root?.style.pointerEvents === "none") {
-      root.style.pointerEvents = "";
-    }
-    if (root?.hasAttribute("inert")) {
-      root.removeAttribute("inert");
-    }
-  }, [snippetDialogOpen, opsDialogOpen, connectionDialogOpen]);
-
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -803,7 +763,7 @@ function App() {
     }
     if (!activeTab || !activeConnectionId) return;
     setSnippetName("");
-    deferUiTransition(() => setSnippetDialogOpen(true));
+    setSnippetDialogOpen(true);
   };
 
   const saveSnippet = async () => {
@@ -950,7 +910,7 @@ function App() {
       table: selectedTable?.name ?? "",
     });
     setOpsPreviewCount(null);
-    deferUiTransition(() => setOpsDialogOpen(true));
+    setOpsDialogOpen(true);
   };
 
   const runOperation = async () => {
@@ -1140,59 +1100,35 @@ function App() {
   };
 
   const openAddDialog = () => {
-    deferUiTransition(() => {
-      setConnectionDraft({
-        ...baseConnection,
-        sshTunnel: {
-          enabled: baseConnection.sshTunnel?.enabled ?? false,
-          host: baseConnection.sshTunnel?.host ?? "",
-          port: baseConnection.sshTunnel?.port ?? 22,
-          username: baseConnection.sshTunnel?.username ?? "",
-          localPort: baseConnection.sshTunnel?.localPort ?? 8123,
-        },
-      });
-      setShowCaCertPath(false);
-      setShowSshTunnel(false);
-      setDiagnostics(null);
-      setConnectionDialogOpen(true);
-    });
+    setConnectionDraft({ ...baseConnection });
+    setShowCaCertPath(false);
+    setShowSshTunnel(false);
+    setDiagnostics(null);
+    setConnectionDialogOpen(true);
   };
 
   const openEditDialog = (connection: ConnectionProfile) => {
-    deferUiTransition(() => {
-      setConnectionDraft({
-        id: connection.id,
-        name: connection.name,
-        host: connection.host,
-        port: connection.port,
-        database: connection.database,
-        username: connection.username,
-        secure: connection.secure,
-        tlsInsecureSkipVerify: connection.tlsInsecureSkipVerify ?? false,
-        caCertPath: connection.caCertPath ?? "",
-        sshTunnel: connection.sshTunnel
-          ? {
-              enabled: connection.sshTunnel.enabled ?? false,
-              host: connection.sshTunnel.host ?? "",
-              port: connection.sshTunnel.port ?? 22,
-              username: connection.sshTunnel.username ?? "",
-              localPort: connection.sshTunnel.localPort ?? 8123,
-            }
-          : {
-              enabled: false,
-              host: "",
-              port: 22,
-              username: "",
-              localPort: 8123,
-            },
-        timeoutMs: connection.timeoutMs,
-        password: "",
-      });
-      setShowCaCertPath(Boolean(connection.caCertPath));
-      setShowSshTunnel(Boolean(connection.sshTunnel?.enabled));
-      setDiagnostics(null);
-      setConnectionDialogOpen(true);
+    setConnectionDraft({
+      id: connection.id,
+      name: connection.name,
+      host: connection.host,
+      port: connection.port,
+      database: connection.database,
+      username: connection.username,
+      secure: connection.secure,
+      tlsInsecureSkipVerify: connection.tlsInsecureSkipVerify ?? false,
+      caCertPath: connection.caCertPath ?? "",
+      sshTunnel: {
+        enabled: false,
+        ...connection.sshTunnel,
+      },
+      timeoutMs: connection.timeoutMs,
+      password: "",
     });
+    setShowCaCertPath(Boolean(connection.caCertPath));
+    setShowSshTunnel(Boolean(connection.sshTunnel?.enabled));
+    setDiagnostics(null);
+    setConnectionDialogOpen(true);
   };
 
   /* ── Pending changes system ── */
@@ -2417,28 +2353,28 @@ function App() {
                     <TabsList className="h-8 gap-1 bg-transparent p-0">
                       <TabsTrigger
                         value="history"
-                        className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[state=active]:bg-muted/60"
+                        className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
                       >
                         <Clock className="h-3 w-3" />
                         History
                       </TabsTrigger>
                       <TabsTrigger
                         value="snippets"
-                        className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[state=active]:bg-muted/60"
+                        className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
                       >
                         <Code2 className="h-3 w-3" />
                         Snippets
                       </TabsTrigger>
                       <TabsTrigger
                         value="audit"
-                        className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[state=active]:bg-muted/60"
+                        className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
                       >
                         <Check className="h-3 w-3" />
                         Audit
                       </TabsTrigger>
                       <TabsTrigger
                         value="logs"
-                        className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[state=active]:bg-muted/60"
+                        className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
                       >
                         <Clock className="h-3 w-3" />
                         Logs
@@ -2917,11 +2853,7 @@ function App() {
       </Dialog>
 
       {/* ── Connection Dialog ── */}
-      <Dialog
-        modal={false}
-        open={connectionDialogOpen}
-        onOpenChange={setConnectionDialogOpen}
-      >
+      <Dialog open={connectionDialogOpen} onOpenChange={setConnectionDialogOpen}>
         <DialogContent className="border-border/60 sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>
