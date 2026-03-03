@@ -2853,7 +2853,10 @@ function App() {
       </Dialog>
 
       {/* ── Connection Dialog ── */}
-      <Dialog open={connectionDialogOpen} onOpenChange={setConnectionDialogOpen}>
+      <Dialog
+        open={connectionDialogOpen}
+        onOpenChange={setConnectionDialogOpen}
+      >
         <DialogContent className="border-border/60 sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>
