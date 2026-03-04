@@ -8,7 +8,6 @@ const config = {
   ],
   ignore: ["src/components/ui/**", "src/hooks/use-mobile.ts"],
   ignoreDependencies: [
-    "@playwright/test",
     "cmdk",
     "date-fns",
     "embla-carousel-react",
@@ -17,6 +16,7 @@ const config = {
     "react-day-picker",
     "react-resizable-panels",
     "recharts",
+    "tailwindcss",
     "vaul",
   ],
   ignoreExportsUsedInFile: true,

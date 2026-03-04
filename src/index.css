@@ -1,6 +1,39 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: hsl(222 26% 8%);
+  --color-foreground: hsl(216 20% 94%);
+  --color-card: hsl(222 24% 11%);
+  --color-card-foreground: hsl(214 24% 92%);
+  --color-popover: hsl(220 24% 10%);
+  --color-popover-foreground: hsl(214 24% 92%);
+  --color-primary: hsl(194 94% 54%);
+  --color-primary-foreground: hsl(218 38% 8%);
+  --color-secondary: hsl(220 19% 18%);
+  --color-secondary-foreground: hsl(214 24% 92%);
+  --color-muted: hsl(219 17% 16%);
+  --color-muted-foreground: hsl(214 9% 65%);
+  --color-accent: hsl(32 95% 52%);
+  --color-accent-foreground: hsl(218 38% 8%);
+  --color-destructive: hsl(0 74% 56%);
+  --color-destructive-foreground: hsl(214 24% 92%);
+  --color-border: hsl(218 16% 24%);
+  --color-input: hsl(218 18% 18%);
+  --color-ring: hsl(194 94% 54%);
+  --color-chart-1: hsl(194 94% 54%);
+  --color-chart-2: hsl(32 95% 52%);
+  --color-chart-3: hsl(154 69% 44%);
+  --color-chart-4: hsl(284 71% 57%);
+  --color-chart-5: hsl(5 80% 59%);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.65rem;
+}
 
 @layer base {
   * {
@@ -24,50 +57,20 @@
       ),
       linear-gradient(180deg, hsl(220 18% 8%), hsl(220 16% 6%));
   }
-
-  :root {
-    --background: 222 26% 8%;
-    --foreground: 216 20% 94%;
-    --card: 222 24% 11%;
-    --card-foreground: 214 24% 92%;
-    --popover: 220 24% 10%;
-    --popover-foreground: 214 24% 92%;
-    --primary: 194 94% 54%;
-    --primary-foreground: 218 38% 8%;
-    --secondary: 220 19% 18%;
-    --secondary-foreground: 214 24% 92%;
-    --muted: 219 17% 16%;
-    --muted-foreground: 214 9% 65%;
-    --accent: 32 95% 52%;
-    --accent-foreground: 218 38% 8%;
-    --destructive: 0 74% 56%;
-    --destructive-foreground: 214 24% 92%;
-    --border: 218 16% 24%;
-    --input: 218 18% 18%;
-    --ring: 194 94% 54%;
-    --chart-1: 194 94% 54%;
-    --chart-2: 32 95% 52%;
-    --chart-3: 154 69% 44%;
-    --chart-4: 284 71% 57%;
-    --chart-5: 5 80% 59%;
-    --radius: 0.65rem;
-  }
 }
 
-@layer components {
-  .mono {
-    font-family: "JetBrains Mono", monospace;
-  }
+@utility mono {
+  font-family: "JetBrains Mono", monospace;
+}
 
-  .glass {
-    background: linear-gradient(
-      165deg,
-      hsl(222 24% 13% / 0.92),
-      hsl(222 24% 10% / 0.9)
-    );
-    backdrop-filter: blur(12px);
-    border: 1px solid hsl(var(--border));
-  }
+@utility glass {
+  background: linear-gradient(
+    165deg,
+    hsl(222 24% 13% / 0.92),
+    hsl(222 24% 10% / 0.9)
+  );
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border);
 }
 
 /* Skeleton shimmer */

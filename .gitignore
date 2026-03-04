@@ -2,10 +2,7 @@
 logs
 *.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
 node_modules
 dist
@@ -16,27 +13,10 @@ src-tauri/target-validation
 src-tauri/gen
 src-tauri/tauri.validation.conf.json
 test-results
-.tmp/*.log
-.tmp/*.pid
-.tmp/*.result
 .tmp/
 .tmp*
 _tmp*
-.agents/
-.claude/
 .playwright-cli/
-screenshot*.png
-skills-lock.json
-.codex-tauri-smoke.ps1
-.dogfood-manual.ps1
-.tmp-dogfood-flow*.ps1
-run-dogfood.ps1
-dogfood-repro.ps1
-eval-repro-*.yml
-own-*.yml
-freeze*-dialog-*.yml
-p.out
-p.err
 
 # Editor directories and files
 .vscode/*

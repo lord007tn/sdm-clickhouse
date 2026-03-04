@@ -1,9 +1,9 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import fs from "node:fs";
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 const packageJsonPath = path.resolve(__dirname, "package.json");
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8")) as {
@@ -13,7 +13,7 @@ const appVersion = packageJson.version;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react()],
+  plugins: [tailwindcss(), react()],
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
   },
@@ -51,6 +51,9 @@ export default defineConfig(async () => ({
           if (!id.includes("node_modules")) return;
           if (id.includes("@tauri-apps")) {
             return "vendor-tauri";
+          }
+          if (id.includes("recharts") || id.includes("d3-")) {
+            return "vendor-charts";
           }
           if (
             id.includes("@base-ui") ||

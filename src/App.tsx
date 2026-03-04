@@ -303,6 +303,15 @@ function App() {
   );
   const [runningDiagnostics, setRunningDiagnostics] = useState(false);
   const [startupNotice, setStartupNotice] = useState<string | null>(null);
+  const setConnectionDraftDeferred = useCallback(
+    (updater: React.SetStateAction<ConnectionInput>) => {
+      window.setTimeout(() => setConnectionDraft(updater), 0);
+    },
+    [],
+  );
+  const setConnectionDialogOpenDeferred = useCallback((open: boolean) => {
+    window.setTimeout(() => setConnectionDialogOpen(open), 0);
+  }, []);
 
   /* ── Inline editing state ── */
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
@@ -585,6 +594,20 @@ function App() {
       resultContainerRef.current.scrollTop = 0;
     }
   }, [activeTab?.result?.queryId, activeTabId]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const anyDialogOpen =
+      snippetDialogOpen || opsDialogOpen || connectionDialogOpen;
+    if (!anyDialogOpen) {
+      if (document.body.style.pointerEvents === "none") {
+        document.body.style.pointerEvents = "";
+      }
+      if (document.body.hasAttribute("inert")) {
+        document.body.removeAttribute("inert");
+      }
+    }
+  }, [snippetDialogOpen, opsDialogOpen, connectionDialogOpen]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1100,15 +1123,17 @@ function App() {
   };
 
   const openAddDialog = () => {
-    setConnectionDraft({ ...baseConnection });
-    setShowCaCertPath(false);
-    setShowSshTunnel(false);
-    setDiagnostics(null);
-    setConnectionDialogOpen(true);
+    window.setTimeout(() => {
+      setConnectionDraftDeferred({ ...baseConnection });
+      setShowCaCertPath(false);
+      setShowSshTunnel(false);
+      setDiagnostics(null);
+      setConnectionDialogOpenDeferred(true);
+    }, 0);
   };
 
   const openEditDialog = (connection: ConnectionProfile) => {
-    setConnectionDraft({
+    setConnectionDraftDeferred({
       id: connection.id,
       name: connection.name,
       host: connection.host,
@@ -1128,7 +1153,7 @@ function App() {
     setShowCaCertPath(Boolean(connection.caCertPath));
     setShowSshTunnel(Boolean(connection.sshTunnel?.enabled));
     setDiagnostics(null);
-    setConnectionDialogOpen(true);
+    setConnectionDialogOpenDeferred(true);
   };
 
   /* ── Pending changes system ── */
@@ -2855,7 +2880,7 @@ function App() {
       {/* ── Connection Dialog ── */}
       <Dialog
         open={connectionDialogOpen}
-        onOpenChange={setConnectionDialogOpen}
+        onOpenChange={setConnectionDialogOpenDeferred}
       >
         <DialogContent className="border-border/60 sm:max-w-[480px]">
           <DialogHeader>
@@ -2881,7 +2906,7 @@ function App() {
                 value={connectionDraft.name}
                 onChange={(e) => {
                   const value = e.currentTarget.value;
-                  setConnectionDraft((v) => ({ ...v, name: value }));
+                  setConnectionDraftDeferred((v) => ({ ...v, name: value }));
                 }}
               />
             </div>
@@ -2899,7 +2924,7 @@ function App() {
                   value={connectionDraft.host}
                   onChange={(e) => {
                     const value = e.currentTarget.value;
-                    setConnectionDraft((v) => ({ ...v, host: value }));
+                    setConnectionDraftDeferred((v) => ({ ...v, host: value }));
                   }}
                 />
               </div>
@@ -2916,7 +2941,7 @@ function App() {
                   value={connectionDraft.port}
                   onChange={(e) => {
                     const value = Number(e.currentTarget.value) || 8123;
-                    setConnectionDraft((v) => ({ ...v, port: value }));
+                    setConnectionDraftDeferred((v) => ({ ...v, port: value }));
                   }}
                 />
               </div>
@@ -2934,7 +2959,10 @@ function App() {
                 value={connectionDraft.database}
                 onChange={(e) => {
                   const value = e.currentTarget.value;
-                  setConnectionDraft((v) => ({ ...v, database: value }));
+                  setConnectionDraftDeferred((v) => ({
+                    ...v,
+                    database: value,
+                  }));
                 }}
               />
             </div>
@@ -2952,7 +2980,10 @@ function App() {
                   value={connectionDraft.username}
                   onChange={(e) => {
                     const value = e.currentTarget.value;
-                    setConnectionDraft((v) => ({ ...v, username: value }));
+                    setConnectionDraftDeferred((v) => ({
+                      ...v,
+                      username: value,
+                    }));
                   }}
                 />
               </div>
@@ -2970,7 +3001,10 @@ function App() {
                   value={connectionDraft.password ?? ""}
                   onChange={(e) => {
                     const value = e.currentTarget.value;
-                    setConnectionDraft((v) => ({ ...v, password: value }));
+                    setConnectionDraftDeferred((v) => ({
+                      ...v,
+                      password: value,
+                    }));
                   }}
                 />
               </div>
@@ -2984,7 +3018,10 @@ function App() {
                   checked={connectionDraft.secure}
                   onChange={(e) => {
                     const checked = e.currentTarget.checked;
-                    setConnectionDraft((v) => ({ ...v, secure: checked }));
+                    setConnectionDraftDeferred((v) => ({
+                      ...v,
+                      secure: checked,
+                    }));
                   }}
                 />
                 <label
@@ -3002,7 +3039,7 @@ function App() {
                   checked={Boolean(connectionDraft.tlsInsecureSkipVerify)}
                   onChange={(e) => {
                     const checked = e.currentTarget.checked;
-                    setConnectionDraft((v) => ({
+                    setConnectionDraftDeferred((v) => ({
                       ...v,
                       tlsInsecureSkipVerify: checked,
                     }));
@@ -3030,7 +3067,10 @@ function App() {
                   value={connectionDraft.timeoutMs ?? 30000}
                   onChange={(e) => {
                     const value = Number(e.currentTarget.value) || 30000;
-                    setConnectionDraft((v) => ({ ...v, timeoutMs: value }));
+                    setConnectionDraftDeferred((v) => ({
+                      ...v,
+                      timeoutMs: value,
+                    }));
                   }}
                 />
               </div>
@@ -3049,7 +3089,10 @@ function App() {
                         const checked = e.currentTarget.checked;
                         setShowCaCertPath(checked);
                         if (!checked) {
-                          setConnectionDraft((v) => ({ ...v, caCertPath: "" }));
+                          setConnectionDraftDeferred((v) => ({
+                            ...v,
+                            caCertPath: "",
+                          }));
                         }
                       }}
                     />
@@ -3068,7 +3111,7 @@ function App() {
                         const checked = e.currentTarget.checked;
                         setShowSshTunnel(checked);
                         if (!checked) {
-                          setConnectionDraft((v) => ({
+                          setConnectionDraftDeferred((v) => ({
                             ...v,
                             sshTunnel: {
                               enabled: false,
@@ -3079,7 +3122,7 @@ function App() {
                             },
                           }));
                         } else {
-                          setConnectionDraft((v) => ({
+                          setConnectionDraftDeferred((v) => ({
                             ...v,
                             sshTunnel: {
                               enabled: true,
@@ -3111,7 +3154,10 @@ function App() {
                   value={connectionDraft.caCertPath ?? ""}
                   onChange={(e) => {
                     const value = e.currentTarget.value;
-                    setConnectionDraft((v) => ({ ...v, caCertPath: value }));
+                    setConnectionDraftDeferred((v) => ({
+                      ...v,
+                      caCertPath: value,
+                    }));
                   }}
                 />
               </div>
@@ -3127,7 +3173,7 @@ function App() {
                     value={connectionDraft.sshTunnel?.host ?? ""}
                     onChange={(e) => {
                       const host = e.currentTarget.value;
-                      setConnectionDraft((v) => ({
+                      setConnectionDraftDeferred((v) => ({
                         ...v,
                         sshTunnel: {
                           ...(v.sshTunnel ?? {}),
@@ -3143,7 +3189,7 @@ function App() {
                     value={connectionDraft.sshTunnel?.port ?? 22}
                     onChange={(e) => {
                       const port = Number(e.currentTarget.value) || 22;
-                      setConnectionDraft((v) => ({
+                      setConnectionDraftDeferred((v) => ({
                         ...v,
                         sshTunnel: {
                           ...(v.sshTunnel ?? {}),
@@ -3158,7 +3204,7 @@ function App() {
                     value={connectionDraft.sshTunnel?.username ?? ""}
                     onChange={(e) => {
                       const username = e.currentTarget.value;
-                      setConnectionDraft((v) => ({
+                      setConnectionDraftDeferred((v) => ({
                         ...v,
                         sshTunnel: {
                           ...(v.sshTunnel ?? {}),
@@ -3174,7 +3220,7 @@ function App() {
                     value={connectionDraft.sshTunnel?.localPort ?? 8123}
                     onChange={(e) => {
                       const localPort = Number(e.currentTarget.value) || 8123;
-                      setConnectionDraft((v) => ({
+                      setConnectionDraftDeferred((v) => ({
                         ...v,
                         sshTunnel: {
                           ...(v.sshTunnel ?? {}),
@@ -3283,7 +3329,7 @@ function App() {
                 setSavingConnection(true);
                 try {
                   await api.connectionSave(draft);
-                  setConnectionDialogOpen(false);
+                  setConnectionDialogOpenDeferred(false);
                   toast.success("Connection saved.");
                   await loadConnections();
                 } catch (error) {

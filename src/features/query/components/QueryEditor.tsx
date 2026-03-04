@@ -22,8 +22,8 @@ type QueryEditorProps = {
 const queryEditorTheme = EditorView.theme(
   {
     "&": {
-      backgroundColor: "hsl(var(--card) / 0.92)",
-      color: "hsl(var(--foreground))",
+      backgroundColor: "color-mix(in srgb, var(--color-card) 92%, transparent)",
+      color: "var(--color-foreground)",
       fontSize: "0.875rem",
     },
     ".cm-scroller": {
@@ -33,7 +33,7 @@ const queryEditorTheme = EditorView.theme(
     },
     ".cm-content": {
       padding: "0.5rem 0.625rem",
-      caretColor: "hsl(var(--primary))",
+      caretColor: "var(--color-primary)",
     },
     ".cm-gutters": {
       display: "none",
@@ -42,24 +42,26 @@ const queryEditorTheme = EditorView.theme(
       outline: "none",
     },
     ".cm-activeLine": {
-      backgroundColor: "hsl(var(--muted) / 0.32)",
+      backgroundColor:
+        "color-mix(in srgb, var(--color-muted) 32%, transparent)",
     },
     ".cm-selectionBackground, .cm-content ::selection": {
-      backgroundColor: "hsl(var(--primary) / 0.24)",
+      backgroundColor:
+        "color-mix(in srgb, var(--color-primary) 24%, transparent)",
     },
     ".cm-cursor, .cm-dropCursor": {
-      borderLeftColor: "hsl(var(--primary))",
+      borderLeftColor: "var(--color-primary)",
     },
     ".cm-placeholder": {
-      color: "hsl(var(--muted-foreground))",
+      color: "var(--color-muted-foreground)",
     },
     ".cm-tooltip-autocomplete": {
       borderRadius: "0.5rem",
-      border: "1px solid hsl(var(--border))",
-      backgroundColor: "hsl(var(--card))",
+      border: "1px solid var(--color-border)",
+      backgroundColor: "var(--color-card)",
     },
     ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
-      backgroundColor: "hsl(var(--muted))",
+      backgroundColor: "var(--color-muted)",
     },
   },
   { dark: true },

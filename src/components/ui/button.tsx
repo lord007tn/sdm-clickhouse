@@ -1,4 +1,4 @@
-import { Button as ButtonPrimitive } from "@base-ui/react/button";
+import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
@@ -40,19 +40,59 @@ const buttonVariants = cva(
   },
 );
 
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
-  return (
-    <ButtonPrimitive
-      data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  );
-}
+type ButtonProps = Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "size"> &
+  VariantProps<typeof buttonVariants> & {
+    nativeButton?: boolean;
+    render?: React.ReactElement<Record<string, unknown>>;
+  };
+
+const Button = React.forwardRef<HTMLElement, ButtonProps>(
+  (
+    {
+      className,
+      variant = "default",
+      size = "default",
+      nativeButton = true,
+      render,
+      type,
+      children,
+      ...props
+    },
+    ref,
+  ) => {
+    const mergedClassName = cn(buttonVariants({ variant, size, className }));
+
+    if (render) {
+      const renderProps = render.props as Record<string, unknown>;
+      const mergedProps: Record<string, unknown> = {
+        ...props,
+        ...renderProps,
+        ref,
+        "data-slot": "button",
+        className: cn(mergedClassName, renderProps.className as string),
+        children: children ?? renderProps.children,
+      };
+      if (!nativeButton) {
+        delete mergedProps.type;
+      } else {
+        mergedProps.type = type ?? renderProps.type ?? "button";
+      }
+      return React.cloneElement(render, mergedProps);
+    }
+
+    return (
+      <button
+        ref={ref as React.Ref<HTMLButtonElement>}
+        type={type ?? "button"}
+        data-slot="button"
+        className={mergedClassName}
+        {...props}
+      >
+        {children}
+      </button>
+    );
+  },
+);
+Button.displayName = "Button";
 
 export { Button, buttonVariants };
