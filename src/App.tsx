@@ -141,7 +141,7 @@ function Skeleton({
   );
 }
 
-const APP_VERSION = "0.1.15";
+const APP_VERSION = __APP_VERSION__;
 const SNIPPET_SAVE_TIMEOUT_MS = 15_000;
 
 const baseConnection: ConnectionInput = {

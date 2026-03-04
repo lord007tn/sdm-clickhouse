@@ -32,6 +32,9 @@ skills-lock.json
 .tmp-dogfood-flow*.ps1
 run-dogfood.ps1
 dogfood-repro.ps1
+eval-repro-*.yml
+own-*.yml
+freeze*-dialog-*.yml
 p.out
 p.err
 

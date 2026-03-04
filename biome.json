@@ -8,6 +8,9 @@
       "!node_modules",
       "!src-tauri/target",
       "!test-results",
+      "!.agents",
+      "!.claude",
+      "!.playwright-cli",
       "!.tmp"
     ]
   },

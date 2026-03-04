@@ -7,3 +7,6 @@ test-results
 .tmp*
 _tmp*
 dogfood-repro.ps1
+eval-repro-*.yml
+own-*.yml
+freeze*-dialog-*.yml
