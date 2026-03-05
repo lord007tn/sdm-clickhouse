@@ -626,4 +626,3 @@ export function ConnectionDialogPage({
     </Dialog>
   );
 }
-
