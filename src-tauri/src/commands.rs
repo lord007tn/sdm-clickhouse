@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::{fs, path::PathBuf};
 use std::{path::Path, process::Command};
 
@@ -24,6 +24,7 @@ use crate::models::{
 use crate::AppState;
 
 const KEYRING_SERVICE: &str = "sdm-clickhouse";
+const KEYRING_READ_TIMEOUT_MS: u64 = 1_500;
 
 fn into_message(err: anyhow::Error) -> String {
     err.to_string()
@@ -151,34 +152,116 @@ fn delete_fallback_secret(secrets_path: &Path, connection_id: &str) -> anyhow::R
     Ok(())
 }
 
-fn read_secret(state: &State<'_, AppState>, connection_id: &str) -> anyhow::Result<String> {
-    if let Ok(entry) = keyring_entry(connection_id) {
-        if let Ok(secret) = entry.get_password() {
-            return Ok(secret);
+fn keyring_get_password_with_timeout(connection_id: &str) -> Option<String> {
+    let id = connection_id.to_string();
+    let (sender, receiver) = std::sync::mpsc::channel::<Option<String>>();
+    std::thread::spawn(move || {
+        let secret = keyring_entry(&id)
+            .ok()
+            .and_then(|entry| entry.get_password().ok());
+        let _ = sender.send(secret);
+    });
+    receiver
+        .recv_timeout(Duration::from_millis(KEYRING_READ_TIMEOUT_MS))
+        .ok()
+        .flatten()
+}
+
+fn keyring_set_password_background(connection_id: &str, password: &str) {
+    let id = connection_id.to_string();
+    let secret = password.to_string();
+    std::thread::spawn(move || {
+        if let Ok(entry) = keyring_entry(&id) {
+            let _ = entry.set_password(&secret);
         }
-    }
+    });
+}
+
+fn keyring_delete_credential_background(connection_id: &str) {
+    let id = connection_id.to_string();
+    std::thread::spawn(move || {
+        if let Ok(entry) = keyring_entry(&id) {
+            let _ = entry.delete_credential();
+        }
+    });
+}
+
+fn read_secret(state: &State<'_, AppState>, connection_id: &str) -> anyhow::Result<String> {
     if let Ok(Some(secret)) = read_fallback_secret(&state.secrets_path, connection_id) {
+        return Ok(secret);
+    }
+    if let Some(secret) = keyring_get_password_with_timeout(connection_id) {
+        // Migrate keyring-only secrets into fallback storage to avoid future blocking reads.
+        let _ = write_fallback_secret(&state.secrets_path, connection_id, &secret);
         return Ok(secret);
     }
     Err(anyhow::anyhow!("missing secret for connection {}", connection_id))
 }
 
 fn write_secret(state: &State<'_, AppState>, connection_id: &str, password: &str) -> anyhow::Result<()> {
-    if let Ok(entry) = keyring_entry(connection_id) {
-        if entry.set_password(password).is_ok() {
-            let _ = delete_fallback_secret(&state.secrets_path, connection_id);
-            return Ok(());
-        }
-    }
+    // Keep fallback store as the primary source to avoid keyring-induced UI freezes.
     write_fallback_secret(&state.secrets_path, connection_id, password)?;
+    keyring_set_password_background(connection_id, password);
     Ok(())
 }
 
 fn delete_secret(state: &State<'_, AppState>, connection_id: &str) {
-    if let Ok(entry) = keyring_entry(connection_id) {
-        let _ = entry.delete_credential();
-    }
     let _ = delete_fallback_secret(&state.secrets_path, connection_id);
+    keyring_delete_credential_background(connection_id);
+}
+
+fn build_connection_profile_from_input(
+    payload: &ConnectionInput,
+    fallback_id: &str,
+    default_timeout_ms: u64,
+) -> anyhow::Result<ConnectionProfile> {
+    let (host, port, secure) =
+        normalize_connection_endpoint(&payload.host, payload.port, payload.secure)?;
+    let timeout_ms = payload.timeout_ms.unwrap_or(default_timeout_ms);
+
+    Ok(ConnectionProfile {
+        id: payload
+            .id
+            .clone()
+            .unwrap_or_else(|| fallback_id.to_string()),
+        name: payload.name.clone(),
+        host,
+        port,
+        database: payload.database.clone(),
+        username: payload.username.clone(),
+        secure,
+        tls_insecure_skip_verify: payload.tls_insecure_skip_verify.unwrap_or(false),
+        ca_cert_path: payload
+            .ca_cert_path
+            .as_ref()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        ssh_tunnel: payload.ssh_tunnel.clone(),
+        timeout_ms,
+        created_at: String::new(),
+        updated_at: String::new(),
+    })
+}
+
+fn resolve_connection_password(
+    state: &State<'_, AppState>,
+    payload: &ConnectionInput,
+) -> anyhow::Result<String> {
+    if let Some(candidate) = payload.password.as_ref() {
+        if !candidate.trim().is_empty() {
+            return Ok(candidate.clone());
+        }
+        if let Some(id) = payload.id.as_ref() {
+            return read_secret(state, id);
+        }
+        anyhow::bail!("Password is required.");
+    }
+
+    if let Some(id) = payload.id.as_ref() {
+        return read_secret(state, id);
+    }
+
+    anyhow::bail!("Password is required.");
 }
 
 fn normalize_connection_endpoint(
@@ -593,52 +676,16 @@ pub async fn connection_test(
     payload: ConnectionInput,
 ) -> Result<CommandMessage, String> {
     let payload = apply_connection_defaults(&payload);
-    let (host, port, secure) =
-        normalize_connection_endpoint(&payload.host, payload.port, payload.secure)
-            .map_err(into_message)?;
-    let timeout_ms = payload.timeout_ms.unwrap_or(10_000);
-    let profile = ConnectionProfile {
-        id: payload.id.clone().unwrap_or_else(|| "ad-hoc".to_string()),
-        name: payload.name,
-        host,
-        port,
-        database: payload.database,
-        username: payload.username,
-        secure,
-        tls_insecure_skip_verify: payload.tls_insecure_skip_verify.unwrap_or(false),
-        ca_cert_path: payload
-            .ca_cert_path
-            .as_ref()
-            .map(|v| v.trim().to_string())
-            .filter(|v| !v.is_empty()),
-        ssh_tunnel: payload.ssh_tunnel,
-        timeout_ms,
-        created_at: String::new(),
-        updated_at: String::new(),
-    };
-
-    let password = if let Some(candidate) = payload.password {
-        if candidate.trim().is_empty() {
-            if let Some(id) = payload.id {
-                read_secret(&state, &id).map_err(into_message)?
-            } else {
-                return Err("Password is required.".to_string());
-            }
-        } else {
-            candidate
-        }
-    } else if let Some(id) = payload.id {
-        read_secret(&state, &id).map_err(into_message)?
-    } else {
-        return Err("Password is required.".to_string());
-    };
+    let profile =
+        build_connection_profile_from_input(&payload, "ad-hoc", 10_000).map_err(into_message)?;
+    let password = resolve_connection_password(&state, &payload).map_err(into_message)?;
 
     let started = Instant::now();
     let outcome = execute_sql_json(
         &profile,
         &password,
         "SELECT 1 AS ok FORMAT JSON",
-        timeout_ms,
+        profile.timeout_ms,
         None,
     )
     .await;
@@ -1272,47 +1319,16 @@ pub async fn connection_diagnostics(
     payload: ConnectionInput,
 ) -> Result<ConnectionDiagnostics, String> {
     let payload = apply_connection_defaults(&payload);
-    let (host, port, secure) =
-        normalize_connection_endpoint(&payload.host, payload.port, payload.secure)
-            .map_err(into_message)?;
-    let timeout_ms = payload.timeout_ms.unwrap_or(10_000);
-    let profile = ConnectionProfile {
-        id: payload.id.clone().unwrap_or_else(|| "diagnostics".to_string()),
-        name: payload.name,
-        host,
-        port,
-        database: payload.database,
-        username: payload.username,
-        secure,
-        tls_insecure_skip_verify: payload.tls_insecure_skip_verify.unwrap_or(false),
-        ca_cert_path: payload.ca_cert_path,
-        ssh_tunnel: payload.ssh_tunnel,
-        timeout_ms,
-        created_at: String::new(),
-        updated_at: String::new(),
-    };
-    let password = if let Some(candidate) = payload.password {
-        if candidate.trim().is_empty() {
-            if let Some(id) = payload.id {
-                read_secret(&state, &id).map_err(into_message)?
-            } else {
-                return Err("Password is required.".to_string());
-            }
-        } else {
-            candidate
-        }
-    } else if let Some(id) = payload.id {
-        read_secret(&state, &id).map_err(into_message)?
-    } else {
-        return Err("Password is required.".to_string());
-    };
+    let profile = build_connection_profile_from_input(&payload, "diagnostics", 10_000)
+        .map_err(into_message)?;
+    let password = resolve_connection_password(&state, &payload).map_err(into_message)?;
 
     let started = Instant::now();
     match execute_sql_json(
         &profile,
         &password,
         "SELECT version() AS version, now() AS now FORMAT JSON",
-        timeout_ms,
+        profile.timeout_ms,
         None,
     )
     .await

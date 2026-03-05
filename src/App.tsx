@@ -303,15 +303,29 @@ function App() {
   );
   const [runningDiagnostics, setRunningDiagnostics] = useState(false);
   const [startupNotice, setStartupNotice] = useState<string | null>(null);
+  const runDeferred = useCallback((task: () => void) => {
+    window.setTimeout(task, 0);
+  }, []);
+  const runDeferredAsync = useCallback(
+    (task: () => Promise<void>) => {
+      runDeferred(() => {
+        void task();
+      });
+    },
+    [runDeferred],
+  );
   const setConnectionDraftDeferred = useCallback(
     (updater: React.SetStateAction<ConnectionInput>) => {
-      window.setTimeout(() => setConnectionDraft(updater), 0);
+      runDeferred(() => setConnectionDraft(updater));
     },
-    [],
+    [runDeferred],
   );
-  const setConnectionDialogOpenDeferred = useCallback((open: boolean) => {
-    window.setTimeout(() => setConnectionDialogOpen(open), 0);
-  }, []);
+  const setConnectionDialogOpenDeferred = useCallback(
+    (open: boolean) => {
+      runDeferred(() => setConnectionDialogOpen(open));
+    },
+    [runDeferred],
+  );
 
   /* ── Inline editing state ── */
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
@@ -1123,13 +1137,13 @@ function App() {
   };
 
   const openAddDialog = () => {
-    window.setTimeout(() => {
+    runDeferred(() => {
       setConnectionDraftDeferred({ ...baseConnection });
       setShowCaCertPath(false);
       setShowSshTunnel(false);
       setDiagnostics(null);
       setConnectionDialogOpenDeferred(true);
-    }, 0);
+    });
   };
 
   const openEditDialog = (connection: ConnectionProfile) => {
@@ -3259,22 +3273,24 @@ function App() {
               variant="outline"
               size="sm"
               disabled={!isTauriRuntime || runningDiagnostics}
-              onClick={async () => {
-                setRunningDiagnostics(true);
-                try {
-                  const draft = applyConnectionDefaults(connectionDraft);
-                  const result = await api.connectionDiagnostics(draft);
-                  setDiagnostics(result);
-                  if (result.ok) {
-                    toast.success("Diagnostics passed.");
-                  } else {
-                    toast.error(`Diagnostics failed (${result.category}).`);
+              onClick={() => {
+                runDeferredAsync(async () => {
+                  setRunningDiagnostics(true);
+                  try {
+                    const draft = applyConnectionDefaults(connectionDraft);
+                    const result = await api.connectionDiagnostics(draft);
+                    setDiagnostics(result);
+                    if (result.ok) {
+                      toast.success("Diagnostics passed.");
+                    } else {
+                      toast.error(`Diagnostics failed (${result.category}).`);
+                    }
+                  } catch (error) {
+                    toast.error(String(error));
+                  } finally {
+                    setRunningDiagnostics(false);
                   }
-                } catch (error) {
-                  toast.error(String(error));
-                } finally {
-                  setRunningDiagnostics(false);
-                }
+                });
               }}
             >
               {runningDiagnostics && (
@@ -3286,16 +3302,18 @@ function App() {
               variant="outline"
               size="sm"
               disabled={!isTauriRuntime || testingConnection}
-              onClick={async () => {
-                setTestingConnection(true);
-                try {
-                  const draft = applyConnectionDefaults(connectionDraft);
-                  toast.success((await api.connectionTest(draft)).message);
-                } catch (error) {
-                  toast.error(String(error));
-                } finally {
-                  setTestingConnection(false);
-                }
+              onClick={() => {
+                runDeferredAsync(async () => {
+                  setTestingConnection(true);
+                  try {
+                    const draft = applyConnectionDefaults(connectionDraft);
+                    toast.success((await api.connectionTest(draft)).message);
+                  } catch (error) {
+                    toast.error(String(error));
+                  } finally {
+                    setTestingConnection(false);
+                  }
+                });
               }}
             >
               {testingConnection && (
@@ -3306,37 +3324,39 @@ function App() {
             <Button
               size="sm"
               disabled={!isTauriRuntime || savingConnection}
-              onClick={async () => {
-                const draft = applyConnectionDefaults(connectionDraft);
-                const normalizedHost = draft.host.toLowerCase();
-                const normalizedPort = draft.port || 8123;
-                const normalizedDatabase = draft.database.toLowerCase();
-                const normalizedUsername = draft.username.toLowerCase();
-                const isDuplicate = connections.some(
-                  (c) =>
-                    c.id !== draft.id &&
-                    c.host.toLowerCase() === normalizedHost &&
-                    c.port === normalizedPort &&
-                    c.database.toLowerCase() === normalizedDatabase &&
-                    c.username.toLowerCase() === normalizedUsername,
-                );
-                if (isDuplicate) {
-                  toast.error(
-                    "A connection with the same host, port, database, and username already exists.",
+              onClick={() => {
+                runDeferredAsync(async () => {
+                  const draft = applyConnectionDefaults(connectionDraft);
+                  const normalizedHost = draft.host.toLowerCase();
+                  const normalizedPort = draft.port || 8123;
+                  const normalizedDatabase = draft.database.toLowerCase();
+                  const normalizedUsername = draft.username.toLowerCase();
+                  const isDuplicate = connections.some(
+                    (c) =>
+                      c.id !== draft.id &&
+                      c.host.toLowerCase() === normalizedHost &&
+                      c.port === normalizedPort &&
+                      c.database.toLowerCase() === normalizedDatabase &&
+                      c.username.toLowerCase() === normalizedUsername,
                   );
-                  return;
-                }
-                setSavingConnection(true);
-                try {
-                  await api.connectionSave(draft);
-                  setConnectionDialogOpenDeferred(false);
-                  toast.success("Connection saved.");
-                  await loadConnections();
-                } catch (error) {
-                  toast.error(String(error));
-                } finally {
-                  setSavingConnection(false);
-                }
+                  if (isDuplicate) {
+                    toast.error(
+                      "A connection with the same host, port, database, and username already exists.",
+                    );
+                    return;
+                  }
+                  setSavingConnection(true);
+                  try {
+                    await api.connectionSave(draft);
+                    setConnectionDialogOpenDeferred(false);
+                    toast.success("Connection saved.");
+                    await loadConnections();
+                  } catch (error) {
+                    toast.error(String(error));
+                  } finally {
+                    setSavingConnection(false);
+                  }
+                });
               }}
             >
               {savingConnection && (
