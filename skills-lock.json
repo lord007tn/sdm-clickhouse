@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "b107e5c471729cce17c0463c21415393054782d60b349d2f0eb64cbbdeabff15"
     },
+    "dogfood": {
+      "source": "vercel-labs/agent-browser",
+      "sourceType": "github",
+      "computedHash": "6b29970dbf48224eaf88f66f1187c2fd61cf443336ee58e125d0bafd15fb3084"
+    },
     "find-skills": {
       "source": "vercel-labs/skills",
       "sourceType": "github",

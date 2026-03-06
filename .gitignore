@@ -28,3 +28,6 @@ _tmp*
 *.njsproj
 *.sln
 *.sw?
+dogfood-output/
+.agents/skills/dogfood/
+.claude/skills/dogfood/
