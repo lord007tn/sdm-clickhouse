@@ -155,3 +155,25 @@ export type UpdateCheckResult = {
   sha256?: string;
   target: string;
 };
+
+export type OverviewDatum = {
+  name: string;
+  value: number;
+  secondaryValue?: number;
+};
+
+export type ClickHouseOverview = {
+  generatedAt: string;
+  serverVersion: string;
+  databaseCount: number;
+  tableCount: number;
+  activePartCount: number;
+  activeQueryCount: number;
+  pendingMutationCount: number;
+  totalRows: number;
+  totalBytes: number;
+  storageByDatabase: OverviewDatum[];
+  tablesByEngine: OverviewDatum[];
+  hottestTablesByParts: OverviewDatum[];
+  activeQueriesByUser: OverviewDatum[];
+};

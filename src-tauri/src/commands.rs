@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 use std::{fs, path::PathBuf};
 use std::{path::Path, process::Command};
 
+use chrono::Utc;
 use keyring::Entry;
 use serde::Deserialize;
 use serde_json::Value;
@@ -17,9 +18,10 @@ use crate::clickhouse::{
 };
 use crate::db;
 use crate::models::{
-    AppLogItem, AuditItem, CommandMessage, ConnectionDiagnostics, ConnectionExport,
-    ConnectionInput, ConnectionProfile, CountPreview, DdlRequest, HistoryItem, MutationRequest,
-    QueryRequest, QueryResult, SnippetInput, SnippetItem, UpdateCheckResult,
+    AppLogItem, AuditItem, ClickHouseOverview, CommandMessage, ConnectionDiagnostics,
+    ConnectionExport, ConnectionInput, ConnectionProfile, CountPreview, DdlRequest, HistoryItem,
+    MutationRequest, OverviewDatum, QueryRequest, QueryResult, SnippetInput, SnippetItem,
+    UpdateCheckResult,
 };
 use crate::AppState;
 
@@ -921,6 +923,48 @@ pub async fn query_execute(
     }
 }
 
+fn extract_f64(value: &Value) -> Option<f64> {
+    match value {
+        Value::Number(number) => number.as_f64(),
+        Value::String(text) => text.parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+fn extract_u64_row(row: &Value, key: &str) -> u64 {
+    row.get(key).and_then(extract_f64).unwrap_or(0.0).max(0.0) as u64
+}
+
+fn extract_f64_row(row: &Value, key: &str) -> f64 {
+    row.get(key).and_then(extract_f64).unwrap_or(0.0).max(0.0)
+}
+
+fn extract_string_row(row: &Value, key: &str, fallback: &str) -> String {
+    row.get(key)
+        .and_then(|value| value.as_str())
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .unwrap_or(fallback)
+        .to_string()
+}
+
+fn extract_overview_series(
+    rows: &[Value],
+    name_key: &str,
+    value_key: &str,
+    secondary_key: Option<&str>,
+    fallback_prefix: &str,
+) -> Vec<OverviewDatum> {
+    rows.iter()
+        .enumerate()
+        .map(|(index, row)| OverviewDatum {
+            name: extract_string_row(row, name_key, &format!("{fallback_prefix} {}", index + 1)),
+            value: extract_f64_row(row, value_key),
+            secondary_value: secondary_key.map(|key| extract_f64_row(row, key)),
+        })
+        .collect()
+}
+
 #[tauri::command]
 pub fn history_list(
     state: State<'_, AppState>,
@@ -1302,6 +1346,148 @@ pub async fn schema_get_table_ddl(
         .map_err(format_categorized_error)?;
     Ok(CommandMessage {
         message: ddl.trim().to_string(),
+    })
+}
+
+#[tauri::command]
+pub async fn clickhouse_overview(
+    state: State<'_, AppState>,
+    connection_id: String,
+) -> Result<ClickHouseOverview, String> {
+    let (profile, password) =
+        get_connection_with_secret(&state, &connection_id).map_err(into_message)?;
+
+    let summary_sql = r#"
+        SELECT
+          version() AS server_version,
+          (SELECT count() FROM system.databases) AS database_count,
+          (SELECT count() FROM system.tables) AS table_count,
+          (SELECT count() FROM system.parts WHERE active) AS active_part_count,
+          (SELECT sum(rows) FROM system.parts WHERE active) AS total_rows,
+          (SELECT sum(bytes_on_disk) FROM system.parts WHERE active) AS total_bytes,
+          (SELECT count() FROM system.processes) AS active_query_count,
+          (SELECT count() FROM system.mutations WHERE is_done = 0) AS pending_mutation_count
+        FORMAT JSON
+    "#;
+    let storage_sql = r#"
+        SELECT
+          database,
+          sum(bytes_on_disk) AS value,
+          sum(rows) AS secondary_value
+        FROM system.parts
+        WHERE active
+        GROUP BY database
+        ORDER BY value DESC
+        LIMIT 6
+        FORMAT JSON
+    "#;
+    let engine_sql = r#"
+        SELECT
+          engine AS name,
+          count() AS value
+        FROM system.tables
+        GROUP BY engine
+        ORDER BY value DESC, name ASC
+        LIMIT 6
+        FORMAT JSON
+    "#;
+    let hottest_tables_sql = r#"
+        SELECT
+          concat(database, '.', table) AS name,
+          count() AS value,
+          sum(rows) AS secondary_value
+        FROM system.parts
+        WHERE active
+        GROUP BY database, table
+        ORDER BY value DESC, secondary_value DESC
+        LIMIT 6
+        FORMAT JSON
+    "#;
+    let active_queries_sql = r#"
+        SELECT
+          if(empty(user), 'unknown', user) AS name,
+          count() AS value
+        FROM system.processes
+        GROUP BY user
+        ORDER BY value DESC, name ASC
+        LIMIT 5
+        FORMAT JSON
+    "#;
+
+    let summary =
+        execute_sql_json(&profile, &password, summary_sql, profile.timeout_ms, None)
+            .await
+            .map_err(format_categorized_error)?;
+    let storage =
+        execute_sql_json(&profile, &password, storage_sql, profile.timeout_ms, None)
+            .await
+            .map_err(format_categorized_error)?;
+    let engines =
+        execute_sql_json(&profile, &password, engine_sql, profile.timeout_ms, None)
+            .await
+            .map_err(format_categorized_error)?;
+    let hottest_tables =
+        execute_sql_json(
+            &profile,
+            &password,
+            hottest_tables_sql,
+            profile.timeout_ms,
+            None,
+        )
+        .await
+        .map_err(format_categorized_error)?;
+    let active_queries =
+        execute_sql_json(
+            &profile,
+            &password,
+            active_queries_sql,
+            profile.timeout_ms,
+            None,
+        )
+        .await
+        .map_err(format_categorized_error)?;
+
+    let summary_row = summary.rows.first().cloned().unwrap_or(Value::Null);
+    let server_version = extract_string_row(&summary_row, "server_version", "unknown");
+
+    Ok(ClickHouseOverview {
+        generated_at: Utc::now().to_rfc3339(),
+        server_version,
+        database_count: extract_u64_row(&summary_row, "database_count"),
+        table_count: extract_u64_row(&summary_row, "table_count"),
+        active_part_count: extract_u64_row(&summary_row, "active_part_count"),
+        active_query_count: extract_u64_row(&summary_row, "active_query_count"),
+        pending_mutation_count: extract_u64_row(&summary_row, "pending_mutation_count"),
+        total_rows: extract_f64_row(&summary_row, "total_rows"),
+        total_bytes: extract_f64_row(&summary_row, "total_bytes"),
+        storage_by_database: extract_overview_series(
+            &storage.rows,
+            "database",
+            "value",
+            Some("secondary_value"),
+            "Database",
+        ),
+        tables_by_engine: extract_overview_series(
+            &engines.rows,
+            "name",
+            "value",
+            None,
+            "Engine",
+        ),
+        hottest_tables_by_parts: extract_overview_series(
+            &hottest_tables.rows,
+            "name",
+            "value",
+            Some("secondary_value"),
+            "Table",
+        ),
+        active_queries_by_user: extract_overview_series(
+            &active_queries.rows,
+            "name",
+            "value",
+            None,
+            "User",
+        ),
     })
 }
 

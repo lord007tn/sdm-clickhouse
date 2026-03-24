@@ -78,6 +78,34 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
           return { ok: true, category: "network", detail: "ok", latencyMs: 1 };
         case "schema_list_databases":
           return [{ name: "default" }];
+        case "clickhouse_overview":
+          return {
+            generatedAt: new Date().toISOString(),
+            serverVersion: "25.3.1.5",
+            databaseCount: 1,
+            tableCount: 4,
+            activePartCount: 18,
+            activeQueryCount: 2,
+            pendingMutationCount: 1,
+            totalRows: 42800,
+            totalBytes: 268435456,
+            storageByDatabase: [
+              { name: "default", value: 201326592, secondaryValue: 32500 },
+              { name: "analytics", value: 67108864, secondaryValue: 10300 },
+            ],
+            tablesByEngine: [
+              { name: "MergeTree", value: 3 },
+              { name: "ReplacingMergeTree", value: 1 },
+            ],
+            hottestTablesByParts: [
+              { name: "default.events", value: 12, secondaryValue: 28000 },
+              { name: "analytics.sessions", value: 6, secondaryValue: 14800 },
+            ],
+            activeQueriesByUser: [
+              { name: "default", value: 1 },
+              { name: "etl", value: 1 },
+            ],
+          };
         case "history_list":
         case "snippet_list":
         case "audit_list":
@@ -147,6 +175,7 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
   await page.goto("/");
 
   const sqlEditor = page.getByTestId("sql-editor");
+  await expect(page.getByText("Cluster Pulse")).toBeVisible();
   await expect(sqlEditor).toBeVisible();
   await expect(
     sqlEditor.locator('[contenteditable="true"][role="textbox"]'),

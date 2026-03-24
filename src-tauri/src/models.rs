@@ -200,3 +200,29 @@ pub struct UpdateCheckResult {
     pub sha256: Option<String>,
     pub target: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OverviewDatum {
+    pub name: String,
+    pub value: f64,
+    pub secondary_value: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClickHouseOverview {
+    pub generated_at: String,
+    pub server_version: String,
+    pub database_count: u64,
+    pub table_count: u64,
+    pub active_part_count: u64,
+    pub active_query_count: u64,
+    pub pending_mutation_count: u64,
+    pub total_rows: f64,
+    pub total_bytes: f64,
+    pub storage_by_database: Vec<OverviewDatum>,
+    pub tables_by_engine: Vec<OverviewDatum>,
+    pub hottest_tables_by_parts: Vec<OverviewDatum>,
+    pub active_queries_by_user: Vec<OverviewDatum>,
+}

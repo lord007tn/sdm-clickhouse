@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AppLogItem,
   AuditItem,
+  ClickHouseOverview,
   CommandMessage,
   ConnectionDiagnostics,
   ConnectionInput,
@@ -140,6 +141,11 @@ export const api = {
       connectionId,
       database,
       table,
+    }),
+
+  clickhouseOverview: (connectionId: string) =>
+    tauriInvoke<ClickHouseOverview>("clickhouse_overview", {
+      connectionId,
     }),
 
   queryExecute: (request: QueryRequest) =>

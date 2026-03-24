@@ -90,6 +90,7 @@ pub fn run() {
             commands::schema_list_tables,
             commands::schema_get_columns,
             commands::schema_get_table_ddl,
+            commands::clickhouse_overview,
             commands::query_execute,
             commands::query_cancel,
             commands::history_list,

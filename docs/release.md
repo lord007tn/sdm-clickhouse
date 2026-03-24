@@ -1,85 +1,50 @@
-# Release and Update Notes
+# Release Notes
 
-## Local Packaging
+## Current Release
 
-Windows (PowerShell):
+- Version: `v0.1.0`
+- Release page: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.0
+- Target branch: `main`
 
-```powershell
-pnpm tauri build --debug
-```
+## Release Contents
 
-Artifacts are generated under:
+`v0.1.0` packages the first feature release after the initial public tag, including:
 
-- `src-tauri/target/debug/bundle/msi`
-- `src-tauri/target/debug/bundle/nsis`
+- Connection management with secure password handling and diagnostics.
+- Schema browsing for databases, tables, columns, and DDL.
+- A multi-tab SQL workbench with result paging, cancellation, snippets, history, and explain support.
+- Guarded data mutation and DDL workflows with audit logging.
+- Metadata backup/restore, profile import/export, and in-app update support.
+- Overview insights for server activity, engine mix, query pressure, and storage distribution.
 
-Linux (WSL/native Linux):
+## Published Artifacts
 
-```bash
-pnpm tauri build --bundles deb,appimage
-```
+The release workflow publishes these assets when the `v0.1.0` tag is pushed:
 
-Artifacts are generated under:
+- Linux: `.deb`, `.AppImage`, and signature files
+- Windows: `.msi`, NSIS setup `.exe`, signature files, and `sdm-clickhouse_v0.1.0_x64_portable.zip`
+- macOS: `.dmg`
+- Updater manifest: `latest.json`
 
-- `src-tauri/target/release/bundle/deb`
-- `src-tauri/target/release/bundle/appimage`
+## Release Workflow
 
-## Auto Update Integration
+GitHub Actions release automation is defined in `.github/workflows/release.yml` and does the following:
 
-- The app includes `tauri-plugin-updater` (Rust + JS).
-- `UpdateChecker` listens to backend `check-for-updates` events and also supports manual checks from the footer action.
-- The sidebar footer shows update state (`checking`, `available`, `downloading`, `installed`) with a live progress bar during download.
-- Built-in updater flow uses `downloadAndInstall()` and relaunches automatically after successful install.
-- To enable production updates, configure:
-  - release artifact hosting
-  - updater endpoint manifest
-  - signing key/public key in Tauri updater config
+1. Verifies manifest versions match the pushed tag.
+2. Verifies the tagged commit is reachable from `main`.
+3. Waits for required CI checks to pass.
+4. Generates release notes with `changelogithub`.
+5. Builds and publishes Tauri bundles for Linux, Windows, and macOS.
+6. Uploads the Windows portable ZIP.
+7. Verifies `latest.json` exists on the release.
 
 ## Installer Scripts
 
-- `install.sh` supports `curl ... | bash` flow on Linux/macOS.
-- `install.ps1` supports `irm ... | iex` flow on Windows.
-- Both scripts:
-  1. Detect OS and architecture
-  2. Pick the matching release artifact
-  3. Verify SHA256 from GitHub release metadata
-  4. Run installation
-- Portable mode is available via `--portable` / `-Portable` or `SDM_CLICKHOUSE_PORTABLE=1`.
-- Portable asset preference:
-  1. Windows: `*portable*.zip`
-  2. macOS: `*.app.tar.gz`
-  3. Linux: AppImage (already portable)
+- `install.sh` supports Linux and macOS release installs.
+- `install.ps1` supports Windows release installs.
+- Both scripts resolve the correct asset from GitHub Releases and verify the SHA256 digest before installation.
 
-## Cross-Platform Release
-
-GitHub Actions automation is configured for:
-
-- CI checks (`.github/workflows/ci.yml`)
-- Label sync (`.github/workflows/label-sync.yml`)
-- PR labeler (`.github/workflows/pr-labeler.yml`)
-- PR title lint (`.github/workflows/pr-title-lint.yml`)
-- Stale management (`.github/workflows/stale.yml`)
-- Tag release with changelog and cross-platform bundles (`.github/workflows/release.yml`)
-
-Release workflow behavior:
-
-1. Trigger on `v*` tag push.
-2. Run `npx changelogithub@latest` to generate release notes.
-3. Build and publish bundles on:
-   - `ubuntu-latest` (`deb`, `AppImage`)
-   - `windows-latest` (`msi`, `nsis`)
-   - `macos-latest` (`dmg`)
-4. Package and upload Windows portable ZIP (`sdm-clickhouse_<tag>_<arch>_portable.zip`) to the same tag.
-5. Generate and upload updater manifest `latest.json` via `tauri-action`.
-6. Verify `latest.json` exists on the tagged release.
-
-Portable release outputs:
-
-- Windows portable ZIP from release workflow upload step
-- macOS `*.app.tar.gz` updater bundle (portable app bundle artifact)
-- Linux AppImage
-
-Detailed runbook:
+## Related Docs
 
 - [Cross-Platform Release Checklist](./release-checklist.md)
 - [v0.1.0 Deliverables](./v0.1.0-deliverables.md)

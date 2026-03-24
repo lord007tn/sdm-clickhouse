@@ -38,6 +38,7 @@ import {
   parseTableFromSql,
 } from "@/features/query/lib/sql";
 import { UpdateChecker } from "@/components/update-checker/UpdateChecker";
+import { ConnectionOverview } from "@/components/insights/ConnectionOverview";
 import { QueryEditor } from "@/features/query/components/QueryEditor";
 import { ConnectionDialogPage } from "@/pages/connection-dialog-page";
 import {
@@ -48,6 +49,7 @@ import {
 import type {
   AppLogItem,
   AuditItem,
+  ClickHouseOverview,
   ConnectionInput,
   ConnectionProfile,
 } from "@/types";
@@ -243,6 +245,9 @@ function App() {
   const [savingSnippet, setSavingSnippet] = useState(false);
   const [auditItems, setAuditItems] = useState<AuditItem[]>([]);
   const [appLogs, setAppLogs] = useState<AppLogItem[]>([]);
+  const [overview, setOverview] = useState<ClickHouseOverview | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [opsDialogOpen, setOpsDialogOpen] = useState(false);
   const [opsDraft, setOpsDraft] = useState<OpsDraft>(baseOpsDraft);
@@ -496,6 +501,31 @@ function App() {
     }
   }, [activeConnectionId]);
 
+  const loadOverview = useCallback(async () => {
+    if (!isTauriRuntime || !activeConnectionId) {
+      setOverview(null);
+      setOverviewError(null);
+      setOverviewLoading(false);
+      return;
+    }
+
+    setOverviewLoading(true);
+    try {
+      const next = await api.clickhouseOverview(activeConnectionId);
+      setOverview(next);
+      setOverviewError(null);
+    } catch (error) {
+      setOverviewError(String(error));
+    } finally {
+      setOverviewLoading(false);
+    }
+  }, [activeConnectionId, isTauriRuntime]);
+
+  const refreshActiveConnectionData = useCallback(() => {
+    void loadWorkspace().catch((error) => toast.error(String(error)));
+    void loadOverview();
+  }, [loadOverview, loadWorkspace]);
+
   /* ── Effects ── */
   useEffect(() => {
     if (!isTauriRuntime) {
@@ -516,7 +546,8 @@ function App() {
   useEffect(() => {
     if (!activeConnectionId) return;
     void loadWorkspace().catch((error) => toast.error(String(error)));
-  }, [activeConnectionId, loadWorkspace]);
+    void loadOverview();
+  }, [activeConnectionId, loadOverview, loadWorkspace]);
 
   useEffect(() => {
     if (!isTauriRuntime || connections.length === 0) return;
@@ -527,10 +558,23 @@ function App() {
   }, [connections, isTauriRuntime, refreshConnectionHealth]);
 
   useEffect(() => {
+    if (!isTauriRuntime || !activeConnectionId) return;
+    const timer = window.setInterval(() => {
+      void loadOverview();
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [activeConnectionId, isTauriRuntime, loadOverview]);
+
+  useEffect(() => {
     setSelectedTable(null);
     setSelectedTableColumns([]);
     setSelectedTableDdl("");
     setSelectedTableLoading(false);
+    if (!activeConnectionId) {
+      setOverview(null);
+      setOverviewError(null);
+      setOverviewLoading(false);
+    }
   }, [activeConnectionId]);
 
   // Clear pending changes on tab switch or connection change
@@ -897,7 +941,7 @@ function App() {
       toast.success(out.message);
       await loadConnections();
       if (activeConnectionId) {
-        await loadWorkspace();
+        await Promise.all([loadWorkspace(), loadOverview()]);
       }
     } catch (error) {
       toast.error(String(error));
@@ -1076,7 +1120,7 @@ function App() {
 
       setOpsDialogOpen(false);
       setOpsPreviewCount(null);
-      await loadWorkspace();
+      await Promise.all([loadWorkspace(), loadOverview()]);
     } catch (error) {
       toast.error(String(error));
     } finally {
@@ -1475,11 +1519,7 @@ function App() {
               </span>
               <button
                 className="rounded-md p-1 hover:bg-muted/60"
-                onClick={() =>
-                  void loadWorkspace().catch((error) =>
-                    toast.error(String(error)),
-                  )
-                }
+                onClick={refreshActiveConnectionData}
                 title="Refresh"
                 aria-label="Refresh workspace"
               >
@@ -1856,6 +1896,14 @@ function App() {
                 Ops
               </Button>
             </div>
+
+            <ConnectionOverview
+              overview={overview}
+              loading={overviewLoading}
+              error={overviewError}
+              disabled={!isTauriRuntime}
+              onRefresh={refreshActiveConnectionData}
+            />
 
             {/* Tab bar */}
             <div className="flex items-center border-b border-border/50 bg-muted/20">
