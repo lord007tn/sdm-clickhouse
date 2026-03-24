@@ -126,6 +126,9 @@ type OpsDraft = {
 
 /* ────────────────────────────── Helpers ──────────────────────────── */
 
+const EMPTY_RESULT_ROWS: ResultRow[] = [];
+const EMPTY_RESULT_COLUMNS: ColumnDef<ResultRow>[] = [];
+
 function Skeleton({
   className,
   style,
@@ -248,14 +251,35 @@ function App() {
   const [connectionDialogConnectionId, setConnectionDialogConnectionId] =
     useState<string | null>(null);
   const [startupNotice, setStartupNotice] = useState<string | null>(null);
+  const releaseGlobalUiLock = useCallback(() => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    const body = document.body;
+    if (!body) return;
+
+    body.style.pointerEvents = "";
+    root.style.pointerEvents = "";
+    body.removeAttribute("inert");
+    root.removeAttribute("inert");
+
+    if (body.getAttribute("aria-hidden") === "true") {
+      body.removeAttribute("aria-hidden");
+    }
+    if (root.getAttribute("aria-hidden") === "true") {
+      root.removeAttribute("aria-hidden");
+    }
+  }, []);
   const queueConnectionDialog = useCallback(
     (open: boolean, connectionId: string | null) => {
       window.setTimeout(() => {
         setConnectionDialogConnectionId(open ? connectionId : null);
         setConnectionDialogOpen(open);
+        if (!open) {
+          releaseGlobalUiLock();
+        }
       }, 0);
     },
-    [],
+    [releaseGlobalUiLock],
   );
 
   /* ── Inline editing state ── */
@@ -294,16 +318,18 @@ function App() {
       );
     });
   }, [databases, tablesByDb, normalizedSchemaFilter]);
-  const resultData = activeTab?.result?.rows ?? [];
-  const resultColumns = useMemo<ColumnDef<ResultRow>[]>(
-    () =>
-      (activeTab?.result?.columns ?? []).map((column) => ({
-        id: column,
-        accessorKey: column,
-        header: column,
-      })),
-    [activeTab?.result?.columns],
-  );
+  const resultData = activeTab?.result?.rows ?? EMPTY_RESULT_ROWS;
+  const resultColumns = useMemo<ColumnDef<ResultRow>[]>(() => {
+    const columns = activeTab?.result?.columns;
+    if (!columns || columns.length === 0) {
+      return EMPTY_RESULT_COLUMNS;
+    }
+    return columns.map((column) => ({
+      id: column,
+      accessorKey: column,
+      header: column,
+    }));
+  }, [activeTab?.result?.columns]);
   const resultTable = useReactTable<ResultRow>({
     data: resultData,
     columns: resultColumns,
@@ -539,6 +565,28 @@ function App() {
       resultContainerRef.current.scrollTop = 0;
     }
   }, [activeTab?.result?.queryId, activeTabId]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (snippetDialogOpen || opsDialogOpen || connectionDialogOpen) return;
+
+    const run = () => releaseGlobalUiLock();
+    window.addEventListener("focus", run);
+    document.addEventListener("visibilitychange", run);
+    run();
+
+    const timer = window.setTimeout(run, 180);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", run);
+      document.removeEventListener("visibilitychange", run);
+    };
+  }, [
+    connectionDialogOpen,
+    opsDialogOpen,
+    releaseGlobalUiLock,
+    snippetDialogOpen,
+  ]);
 
   // Keyboard shortcuts
   useEffect(() => {
