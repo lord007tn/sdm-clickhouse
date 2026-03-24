@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SDM ClickHouse",
+  "version": "0.0.0",
+  "identifier": "cc.raedb.sdm-clickhouse",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "SDM ClickHouse",
+        "width": 1500,
+        "height": 940,
+        "minWidth": 1160,
+        "minHeight": 740
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/lord007tn/sdm-clickhouse/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEzQzM1QkRGQUVBQzRBNzgKUldSNFNxeXUzMXZERS9LdmpUbmNKQjRENXdIeG82YzBVNVIvVUFWbGt6ZnVySkQ1YmdRNnlJYUkK"
+    }
+  }
+}

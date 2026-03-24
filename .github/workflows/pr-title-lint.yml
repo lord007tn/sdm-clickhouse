@@ -1,0 +1,27 @@
+name: PR Title Lint
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request?.title ?? '';
+            const pattern = /^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([\w./-]+\))?!?: .+/;
+
+            if (!pattern.test(title)) {
+              core.setFailed([
+                `Invalid PR title: "${title}"`,
+                'Expected: type(scope): subject',
+                'Allowed types: build, chore, ci, docs, feat, fix, perf, refactor, revert, style, test'
+              ].join('\n'));
+            }

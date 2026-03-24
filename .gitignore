@@ -1,0 +1,36 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+src-tauri/target
+src-tauri/target-validation
+src-tauri/gen
+src-tauri/tauri.validation.conf.json
+test-results
+.tmp/
+.tmp*
+_tmp*
+.playwright-cli/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+dogfood-output/
+.agents/
+.claude/
+skills-lock.json
+.agents/skills/dogfood/
+.claude/skills/dogfood/

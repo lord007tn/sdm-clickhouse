@@ -1,0 +1,255 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  preflight:
+    name: Preflight
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify manifest versions match release tag
+        run: node scripts/check-version-consistency.mjs "${{ github.ref_name }}"
+
+      - name: Verify release tag commit is on main
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          git merge-base --is-ancestor "${GITHUB_SHA}" "origin/main"
+
+      - name: Verify required CI checks are successful
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${REPO}/commits/${SHA}/check-runs?per_page=100"
+          required_checks=("Web Quality" "Rust Check (Tauri)")
+          timeout_seconds=$((30 * 60))
+          poll_interval_seconds=20
+          deadline=$((SECONDS + timeout_seconds))
+
+          while true; do
+            payload="$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "${api}")"
+            pending=0
+            failed=0
+
+            echo "Current checks for ${SHA}:"
+            echo "${payload}" | jq -r '.check_runs[] | "- \(.name): status=\(.status), conclusion=\(.conclusion // "null")"'
+
+            for required in "${required_checks[@]}"; do
+              ok_count="$(echo "${payload}" | jq --arg required "${required}" '[.check_runs[] | select(.name == $required and .status == "completed" and .conclusion == "success")] | length')"
+              fail_count="$(echo "${payload}" | jq --arg required "${required}" '[.check_runs[] | select(.name == $required and .status == "completed" and (.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled" or .conclusion == "action_required" or .conclusion == "startup_failure"))] | length')"
+              run_count="$(echo "${payload}" | jq --arg required "${required}" '[.check_runs[] | select(.name == $required)] | length')"
+
+              if [ "${ok_count}" -gt 0 ]; then
+                continue
+              fi
+
+              if [ "${fail_count}" -gt 0 ]; then
+                echo "Required check '${required}' completed but did not succeed for ${SHA}."
+                failed=1
+                continue
+              fi
+
+              if [ "${run_count}" -eq 0 ]; then
+                echo "Required check '${required}' has not started yet for ${SHA}."
+              else
+                echo "Required check '${required}' is still running for ${SHA}."
+              fi
+              pending=1
+            done
+
+            if [ "${failed}" -eq 1 ]; then
+              exit 1
+            fi
+
+            if [ "${pending}" -eq 0 ]; then
+              echo "All required checks succeeded for ${SHA}."
+              break
+            fi
+
+            if [ "${SECONDS}" -ge "${deadline}" ]; then
+              echo "Timed out waiting for required checks to complete successfully for ${SHA}."
+              exit 1
+            fi
+
+            echo "Waiting ${poll_interval_seconds}s for required checks..."
+            sleep "${poll_interval_seconds}"
+          done
+
+  changelog:
+    name: Generate release notes
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Generate changelog + release notes
+        run: npx changelogithub@latest || echo "changelogithub failed, continuing with artifact publish"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-tauri:
+    name: Publish (${{ matrix.platform }})
+    needs: [preflight, changelog]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            bundles: deb,appimage
+          - os: windows-latest
+            platform: windows
+            bundles: msi,nsis
+          - os: macos-latest
+            platform: macos
+            bundles: dmg
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux Tauri deps
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev \
+            libwebkit2gtk-4.1-dev \
+            pkg-config \
+            libssl-dev
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and publish desktop bundles
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "v__VERSION__"
+          releaseBody: "See CHANGELOG.md for detailed release notes."
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: --bundles ${{ matrix.bundles }}
+
+      - name: Package Windows portable ZIP
+        if: matrix.platform == 'windows'
+        id: package_windows_portable
+        shell: pwsh
+        run: |
+          $arch = "${{ runner.arch }}".ToLowerInvariant()
+          $tag = "${{ github.ref_name }}"
+          $portableName = "sdm-clickhouse_${tag}_${arch}_portable.zip"
+          $portableDir = Join-Path $env:RUNNER_TEMP "sdm-clickhouse-portable"
+          New-Item -ItemType Directory -Path $portableDir -Force | Out-Null
+
+          $preferred = @(
+            "src-tauri/target/release/sdm-clickhouse.exe",
+            "src-tauri/target/release/tauri-app.exe"
+          )
+          $binary = $preferred | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $binary) {
+            $candidate = Get-ChildItem -Path "src-tauri/target/release" -Filter "*.exe" -File |
+              Where-Object { $_.Name -notmatch "(?i)(setup|uninstall|updater|crash)" } |
+              Sort-Object Length -Descending |
+              Select-Object -First 1
+            if ($null -ne $candidate) {
+              $binary = $candidate.FullName
+            }
+          }
+
+          if (-not $binary) {
+            throw "Could not find the Windows release executable to package."
+          }
+
+          Copy-Item -Path $binary -Destination (Join-Path $portableDir "sdm-clickhouse.exe") -Force
+          $zipPath = Join-Path $env:RUNNER_TEMP $portableName
+          if (Test-Path $zipPath) {
+            Remove-Item -Path $zipPath -Force
+          }
+          Compress-Archive -Path (Join-Path $portableDir "*") -DestinationPath $zipPath -Force
+
+          "zip_path=$zipPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "zip_name=$portableName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload Windows portable ZIP
+        if: matrix.platform == 'windows'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: ${{ steps.package_windows_portable.outputs.zip_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  verify-updater-manifest:
+    name: Verify latest.json
+    needs: publish-tauri
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify latest.json exists on release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          assets_url="https://api.github.com/repos/${REPO}/releases/tags/${TAG}"
+          release_json="$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "${assets_url}")"
+          echo "${release_json}" | jq -e '.assets[] | select(.name == "latest.json")' >/dev/null
+          echo "latest.json is present on release ${TAG}."
