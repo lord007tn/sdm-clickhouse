@@ -2,27 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.1.1] - 2026-03-25
-
-### Added
-
-- Result-table filter toolbar with live row counts and sortable column headers in the workbench preview and Tauri runtime.
-
-### Changed
-
-- Small paged result sets now render without virtualization fallback issues, while larger result sets still keep virtual scrolling available.
-- Result sorting now toggles ascending first for a more predictable analyst workflow across text and numeric columns.
-
 ## [0.1.0] - 2026-03-24
 
 ### Added
 
 - Connection overview observability dashboard with storage, engine mix, live query pressure, and hot-table insights.
 - Dedicated backend overview command and typed frontend API for ClickHouse system-table metrics.
+- Result-table filter toolbar with live row counts and sortable column headers in the workbench preview and Tauri runtime.
 
 ### Changed
 
 - Release manifests, docs, and deliverables moved to the `v0.1.0` line for the first feature release after the initial `v0.0.0` public tag.
+- Small paged result sets now render without virtualization fallback issues, while larger result sets still keep virtual scrolling available.
+- Result sorting now toggles ascending first for a more predictable analyst workflow across text and numeric columns.
 
 ## [0.0.0] - 2026-03-24
 
@@ -42,4 +34,3 @@ All notable changes to this project are documented in this file.
 
 [0.0.0]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.0.0
 [0.1.0]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.0
-[0.1.1]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.1
