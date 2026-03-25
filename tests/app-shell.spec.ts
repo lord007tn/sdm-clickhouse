@@ -234,7 +234,10 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
   await page.goto("/");
 
   const sqlEditor = page.getByTestId("sql-editor");
-  await expect(page.getByText("Cluster Pulse")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Open insights" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("observability-panel")).toHaveCount(0);
   await expect(sqlEditor).toBeVisible();
   await expect(
     sqlEditor.locator('[contenteditable="true"][role="textbox"]'),
@@ -279,7 +282,7 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
   ).toBe(false);
 });
 
-test("observability dock scrolls without hiding the query workspace", async ({
+test("insights tray opens on demand and keeps query execution accessible", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -287,10 +290,16 @@ test("observability dock scrolls without hiding the query workspace", async ({
   await page.goto("/");
 
   const sqlEditor = page.getByTestId("sql-editor");
-  const observabilityPanel = page.getByTestId("observability-panel");
-
   await expect(sqlEditor).toBeVisible();
+  await expect(page.getByTestId("observability-panel")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Open insights" }).click();
+
+  const observabilityPanel = page.getByTestId("observability-panel");
   await expect(observabilityPanel).toBeVisible();
+  await expect(
+    page.getByText("Signals without stealing the editor"),
+  ).toBeVisible();
 
   const panelMetrics = await observabilityPanel.evaluate((element) => ({
     clientHeight: element.clientHeight,
@@ -315,6 +324,10 @@ test("observability dock scrolls without hiding the query workspace", async ({
       );
     })
     .toBe(1);
+
+  await page.getByRole("button", { name: "Hide insights" }).click();
+  await expect(page.getByTestId("observability-panel")).toHaveCount(0);
+  await expect(sqlEditor).toBeVisible();
 });
 
 test("filters and sorts result rows in browser preview", async ({ page }) => {

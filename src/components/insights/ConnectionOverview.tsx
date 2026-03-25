@@ -92,39 +92,35 @@ function MetricTile({
   value,
   detail,
   icon: Icon,
-  tone,
 }: {
   label: string;
   value: string;
   detail: string;
   icon: typeof Activity;
-  tone: string;
 }) {
   return (
-    <div
-      className={`rounded-2xl border border-white/8 bg-black/20 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur ${tone}`}
-    >
+    <div className="rounded-2xl border border-border/60 bg-background/90 p-3 shadow-[0_18px_50px_-38px_rgba(15,23,42,0.55)]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/48">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
             {label}
           </div>
-          <div className="mt-2 text-2xl font-semibold tracking-tight text-white">
+          <div className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
             {value}
           </div>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/6 p-2 text-white/72">
+        <div className="rounded-2xl border border-border/60 bg-muted/40 p-2 text-muted-foreground">
           <Icon className="h-4 w-4" />
         </div>
       </div>
-      <div className="mt-2 text-[11px] text-white/56">{detail}</div>
+      <div className="mt-2 text-[11px] text-muted-foreground">{detail}</div>
     </div>
   );
 }
 
 function EmptyChartState({ message }: { message: string }) {
   return (
-    <div className="flex h-full min-h-36 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/10 text-center text-[11px] text-white/46">
+    <div className="flex h-full min-h-36 items-center justify-center rounded-2xl border border-dashed border-border/70 bg-muted/20 px-4 text-center text-[11px] text-muted-foreground">
       {message}
     </div>
   );
@@ -149,10 +145,16 @@ export function ConnectionOverview({
   useEffect(() => {
     setChartsReady(false);
     if (!overview) return;
-    const frame = window.requestAnimationFrame(() => {
-      setChartsReady(true);
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        setChartsReady(true);
+      });
     });
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
   }, [overview]);
 
   const storageData = withFill(
@@ -181,34 +183,31 @@ export function ConnectionOverview({
       : 0;
 
   return (
-    <section className="relative overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(98,198,255,0.16),transparent_34%),radial-gradient(circle_at_80%_20%,rgba(245,184,92,0.14),transparent_28%),linear-gradient(180deg,rgba(6,10,18,0.98),rgba(8,14,24,0.94))]" />
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/35 to-transparent" />
-
-      <div className="relative px-3 py-3">
+    <section className="overflow-hidden rounded-[28px] bg-[linear-gradient(180deg,rgba(253,251,246,0.95),rgba(248,245,238,0.92))] dark:bg-[linear-gradient(180deg,rgba(20,26,36,0.98),rgba(14,19,28,0.96))]">
+      <div className="px-4 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-100/62">
-              Observability
+            <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+              Cluster Insights
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold tracking-tight text-white">
-                Cluster Pulse
+              <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                Signals without stealing the editor
               </h2>
               {overview ? (
-                <span className="rounded-full border border-cyan-200/14 bg-cyan-300/10 px-2 py-0.5 text-[10px] font-medium text-cyan-100/72">
+                <span className="rounded-full border border-border/60 bg-background/80 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                   {overview.serverVersion}
                 </span>
               ) : null}
             </div>
-            <p className="max-w-3xl text-[11px] leading-5 text-white/52">
-              A live overview of storage footprint, engine composition, active
-              query pressure, and the tables creating the most operational heat.
+            <p className="max-w-3xl text-[11px] leading-5 text-muted-foreground">
+              Read storage footprint, engine mix, live pressure, and hottest
+              tables at a glance, then drop straight back into the query flow.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="rounded-full border border-white/8 bg-white/5 px-2.5 py-1 text-[10px] text-white/58">
+            <div className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1 text-[10px] text-muted-foreground">
               {overview
                 ? `Updated ${formatGeneratedAt(overview.generatedAt)}`
                 : "Awaiting signal"}
@@ -216,7 +215,7 @@ export function ConnectionOverview({
             <Button
               size="sm"
               variant="outline"
-              className="h-7 gap-1.5 border-white/10 bg-white/4 px-2.5 text-[11px] text-white/82 hover:bg-white/10 hover:text-white"
+              className="h-7 gap-1.5 border-border/60 bg-background/80 px-2.5 text-[11px]"
               disabled={loading || disabled}
               onClick={onRefresh}
             >
@@ -231,7 +230,7 @@ export function ConnectionOverview({
         </div>
 
         {error ? (
-          <div className="mt-3 rounded-2xl border border-amber-300/16 bg-amber-200/8 px-3 py-2 text-[11px] text-amber-100/82">
+          <div className="mt-3 rounded-2xl border border-amber-500/25 bg-amber-500/8 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-200">
             Insights could not be refreshed: {error}
           </div>
         ) : null}
@@ -241,7 +240,7 @@ export function ConnectionOverview({
             {Array.from({ length: 4 }).map((_, index) => (
               <div
                 key={index}
-                className="h-28 animate-pulse rounded-2xl border border-white/8 bg-white/5"
+                className="h-28 animate-pulse rounded-2xl border border-border/60 bg-muted/30"
               />
             ))}
           </div>
@@ -255,43 +254,39 @@ export function ConnectionOverview({
                 value={formatBytes(overview.totalBytes)}
                 detail={`${formatCompact(overview.totalRows)} rows across active parts`}
                 icon={HardDrive}
-                tone="from-transparent to-transparent"
               />
               <MetricTile
                 label="Catalog"
                 value={`${overview.tableCount}`}
                 detail={`${overview.databaseCount} databases registered`}
                 icon={Database}
-                tone="from-transparent to-transparent"
               />
               <MetricTile
                 label="Live Pressure"
                 value={`${overview.activeQueryCount}`}
                 detail={`${overview.pendingMutationCount} mutations waiting`}
                 icon={Activity}
-                tone="from-transparent to-transparent"
               />
               <MetricTile
                 label="Part Density"
                 value={formatCompact(overview.activePartCount)}
                 detail="Active parts currently visible to the cluster"
                 icon={Layers3}
-                tone="from-transparent to-transparent"
               />
             </div>
 
             <div className="grid gap-3 xl:grid-cols-[1.2fr_0.8fr]">
-              <div className="rounded-[26px] border border-white/8 bg-white/[0.045] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div className="rounded-[26px] border border-border/60 bg-background/88 p-3 shadow-[0_18px_50px_-38px_rgba(15,23,42,0.55)]">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-medium text-white">
+                    <div className="text-sm font-medium text-foreground">
                       Storage by database
                     </div>
-                    <div className="text-[11px] text-white/46">
+                    <div className="text-[11px] text-muted-foreground">
                       Disk footprint with row volume layered into the tooltip.
                     </div>
                   </div>
-                  <div className="rounded-full bg-cyan-300/10 px-2 py-1 text-[10px] text-cyan-100/68">
+                  <div className="rounded-full bg-sky-500/10 px-2 py-1 text-[10px] text-sky-700 dark:text-sky-200">
                     Top {storageData.length || 0}
                   </div>
                 </div>
@@ -382,7 +377,7 @@ export function ConnectionOverview({
                       </AreaChart>
                     </ChartContainer>
                   ) : (
-                    <div className="h-52 animate-pulse rounded-2xl bg-white/4" />
+                    <div className="h-52 animate-pulse rounded-2xl bg-muted/30" />
                   )
                 ) : (
                   <EmptyChartState message="No active parts yet. Storage charts light up after tables start accumulating data." />
@@ -390,17 +385,17 @@ export function ConnectionOverview({
               </div>
 
               <div className="grid gap-3">
-                <div className="rounded-[26px] border border-white/8 bg-white/[0.045] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                <div className="rounded-[26px] border border-border/60 bg-background/88 p-3 shadow-[0_18px_50px_-38px_rgba(15,23,42,0.55)]">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-sm font-medium text-white">
+                      <div className="text-sm font-medium text-foreground">
                         Engine mix
                       </div>
-                      <div className="text-[11px] text-white/46">
+                      <div className="text-[11px] text-muted-foreground">
                         Which storage engines dominate this environment.
                       </div>
                     </div>
-                    <Server className="h-4 w-4 text-amber-200/60" />
+                    <Server className="h-4 w-4 text-amber-600 dark:text-amber-300" />
                   </div>
                   {engineData.length > 0 ? (
                     chartsReady ? (
@@ -438,25 +433,25 @@ export function ConnectionOverview({
                         </BarChart>
                       </ChartContainer>
                     ) : (
-                      <div className="h-44 animate-pulse rounded-2xl bg-white/4" />
+                      <div className="h-44 animate-pulse rounded-2xl bg-muted/30" />
                     )
                   ) : (
                     <EmptyChartState message="Engine composition is unavailable for this connection." />
                   )}
                 </div>
 
-                <div className="rounded-[26px] border border-white/8 bg-white/[0.045] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                <div className="rounded-[26px] border border-border/60 bg-background/88 p-3 shadow-[0_18px_50px_-38px_rgba(15,23,42,0.55)]">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-sm font-medium text-white">
+                      <div className="text-sm font-medium text-foreground">
                         Live query pressure
                       </div>
-                      <div className="text-[11px] text-white/46">
+                      <div className="text-[11px] text-muted-foreground">
                         Session balance across the users currently consuming the
                         cluster.
                       </div>
                     </div>
-                    <Activity className="h-4 w-4 text-cyan-100/54" />
+                    <Activity className="h-4 w-4 text-sky-700 dark:text-sky-200" />
                   </div>
                   {queryData.length > 0 ? (
                     <div className="grid gap-3 sm:grid-cols-[132px_1fr]">
@@ -489,13 +484,13 @@ export function ConnectionOverview({
                           </PieChart>
                         </ChartContainer>
                       ) : (
-                        <div className="h-36 animate-pulse rounded-2xl bg-white/4" />
+                        <div className="h-36 animate-pulse rounded-2xl bg-muted/30" />
                       )}
                       <div className="space-y-2">
                         {queryData.map((item) => (
                           <div
                             key={item.name}
-                            className="rounded-2xl border border-white/8 bg-black/16 px-3 py-2"
+                            className="rounded-2xl border border-border/60 bg-muted/20 px-3 py-2"
                           >
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex items-center gap-2">
@@ -503,11 +498,11 @@ export function ConnectionOverview({
                                   className="h-2.5 w-2.5 rounded-full"
                                   style={{ backgroundColor: item.fill }}
                                 />
-                                <span className="text-[11px] text-white/72">
+                                <span className="text-[11px] text-muted-foreground">
                                   {item.name}
                                 </span>
                               </div>
-                              <span className="text-xs font-medium text-white">
+                              <span className="text-xs font-medium text-foreground">
                                 {item.value}
                               </span>
                             </div>
@@ -523,31 +518,31 @@ export function ConnectionOverview({
             </div>
 
             <div className="grid gap-3 xl:grid-cols-[0.82fr_1.18fr]">
-              <div className="rounded-[26px] border border-white/8 bg-white/[0.045] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div className="rounded-[26px] border border-border/60 bg-background/88 p-3 shadow-[0_18px_50px_-38px_rgba(15,23,42,0.55)]">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-medium text-white">
+                    <div className="text-sm font-medium text-foreground">
                       Operational signals
                     </div>
-                    <div className="text-[11px] text-white/46">
+                    <div className="text-[11px] text-muted-foreground">
                       Fast read on query concurrency versus background mutation
                       backlog.
                     </div>
                   </div>
-                  <Layers3 className="h-4 w-4 text-white/44" />
+                  <Layers3 className="h-4 w-4 text-muted-foreground" />
                 </div>
 
                 <div className="space-y-3">
-                  <div className="rounded-2xl border border-cyan-200/10 bg-cyan-300/6 p-3">
+                  <div className="rounded-2xl border border-sky-500/20 bg-sky-500/8 p-3">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-[11px] uppercase tracking-[0.2em] text-cyan-100/60">
+                      <span className="text-[11px] uppercase tracking-[0.2em] text-sky-700 dark:text-sky-200">
                         Query Flow
                       </span>
-                      <span className="text-lg font-semibold text-white">
+                      <span className="text-lg font-semibold text-foreground">
                         {overview.activeQueryCount}
                       </span>
                     </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/26">
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-sky-950/10 dark:bg-black/26">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-sky-400 to-teal-300"
                         style={{
@@ -560,16 +555,16 @@ export function ConnectionOverview({
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-amber-200/10 bg-amber-300/6 p-3">
+                  <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-3">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-[11px] uppercase tracking-[0.2em] text-amber-100/60">
+                      <span className="text-[11px] uppercase tracking-[0.2em] text-amber-700 dark:text-amber-200">
                         Mutation Queue
                       </span>
-                      <span className="text-lg font-semibold text-white">
+                      <span className="text-lg font-semibold text-foreground">
                         {overview.pendingMutationCount}
                       </span>
                     </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/26">
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-amber-950/10 dark:bg-black/26">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-amber-300 via-orange-400 to-rose-300"
                         style={{
@@ -583,27 +578,27 @@ export function ConnectionOverview({
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-white/8 bg-black/18 p-3">
-                      <div className="text-[10px] uppercase tracking-[0.22em] text-white/44">
+                    <div className="rounded-2xl border border-border/60 bg-muted/20 p-3">
+                      <div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
                         Server
                       </div>
-                      <div className="mt-2 text-sm font-medium text-white">
+                      <div className="mt-2 text-sm font-medium text-foreground">
                         {overview.serverVersion}
                       </div>
-                      <div className="mt-1 text-[11px] text-white/44">
+                      <div className="mt-1 text-[11px] text-muted-foreground">
                         Connection is reading system metadata directly from
                         ClickHouse.
                       </div>
                     </div>
-                    <div className="rounded-2xl border border-white/8 bg-black/18 p-3">
-                      <div className="text-[10px] uppercase tracking-[0.22em] text-white/44">
+                    <div className="rounded-2xl border border-border/60 bg-muted/20 p-3">
+                      <div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
                         Catalog Surface
                       </div>
-                      <div className="mt-2 text-sm font-medium text-white">
+                      <div className="mt-2 text-sm font-medium text-foreground">
                         {overview.databaseCount} DBs · {overview.tableCount}{" "}
                         tables
                       </div>
-                      <div className="mt-1 text-[11px] text-white/44">
+                      <div className="mt-1 text-[11px] text-muted-foreground">
                         Enough metadata is present to drive the next releases:
                         filters, autocomplete, and saved workspaces.
                       </div>
@@ -612,18 +607,18 @@ export function ConnectionOverview({
                 </div>
               </div>
 
-              <div className="rounded-[26px] border border-white/8 bg-white/[0.045] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div className="rounded-[26px] border border-border/60 bg-background/88 p-3 shadow-[0_18px_50px_-38px_rgba(15,23,42,0.55)]">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-medium text-white">
+                    <div className="text-sm font-medium text-foreground">
                       Tables creating the most part churn
                     </div>
-                    <div className="text-[11px] text-white/46">
+                    <div className="text-[11px] text-muted-foreground">
                       The tables with the heaviest active-part footprint usually
                       deserve the next operational look.
                     </div>
                   </div>
-                  <Table2 className="h-4 w-4 text-white/50" />
+                  <Table2 className="h-4 w-4 text-muted-foreground" />
                 </div>
                 {hottestTablesData.length > 0 ? (
                   chartsReady ? (
@@ -689,7 +684,7 @@ export function ConnectionOverview({
                       </BarChart>
                     </ChartContainer>
                   ) : (
-                    <div className="h-56 animate-pulse rounded-2xl bg-white/4" />
+                    <div className="h-56 animate-pulse rounded-2xl bg-muted/30" />
                   )
                 ) : (
                   <EmptyChartState message="Part heat is unavailable until the cluster exposes active parts." />

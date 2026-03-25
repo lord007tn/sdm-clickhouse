@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.3] - 2026-03-25
+
+### Changed
+
+- Reframed observability as a compact summary rail with an on-demand insights tray, so the editor and results stay primary instead of sharing the screen with a permanent metrics dock.
+- Restyled the insights surface into a calmer inspection panel with softer cards, neutral contrast, and bounded scrolling that reads like a tool tray rather than a second app shell.
+
+### Fixed
+
+- Kept the SQL editor visible and runnable while opening, scrolling, and closing observability content.
+- Added a browser-preview regression test for the hidden-by-default insights tray and hardened chart mounting in the shared chart container.
+
 ## [0.1.2] - 2026-03-25
 
 ### Changed
@@ -47,3 +59,4 @@ All notable changes to this project are documented in this file.
 [0.0.0]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.0.0
 [0.1.0]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.0
 [0.1.2]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.2
+[0.1.3]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.3

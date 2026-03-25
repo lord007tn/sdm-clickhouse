@@ -267,6 +267,7 @@ function App() {
   const [overview, setOverview] = useState<ClickHouseOverview | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState<string | null>(null);
+  const [insightsOpen, setInsightsOpen] = useState(false);
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [opsDialogOpen, setOpsDialogOpen] = useState(false);
   const [opsDraft, setOpsDraft] = useState<OpsDraft>(baseOpsDraft);
@@ -2091,11 +2092,123 @@ function App() {
               </Button>
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
+            <div className="flex min-h-0 flex-1 flex-col">
               <div
                 className="flex min-h-0 flex-1 flex-col overflow-hidden"
                 data-testid="workbench-query-pane"
               >
+                <section className="border-b border-border/50 bg-[linear-gradient(180deg,rgba(250,248,240,0.9),rgba(248,245,236,0.7))] px-3 py-3 dark:bg-[linear-gradient(180deg,rgba(21,27,36,0.96),rgba(13,18,27,0.92))]">
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-muted-foreground/80">
+                        Observability
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-sm font-semibold tracking-tight text-foreground">
+                          Cluster overview stays secondary
+                        </h2>
+                        {overview?.serverVersion ? (
+                          <Badge
+                            variant="secondary"
+                            className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                          >
+                            {overview.serverVersion}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <p className="max-w-3xl text-[11px] leading-5 text-muted-foreground">
+                        Keep the query workspace in front. Open insights only
+                        when you need cluster pressure, storage mix, or part
+                        heat.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        variant="secondary"
+                        className="rounded-full border border-border/60 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground"
+                        data-testid="insights-summary"
+                      >
+                        <Database className="mr-1 h-3 w-3" />
+                        {overview
+                          ? `${overview.databaseCount} DBs`
+                          : "No DB stats"}
+                      </Badge>
+                      <Badge
+                        variant="secondary"
+                        className="rounded-full border border-border/60 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground"
+                      >
+                        <Table2 className="mr-1 h-3 w-3" />
+                        {overview
+                          ? `${overview.tableCount} tables`
+                          : "No table stats"}
+                      </Badge>
+                      <Badge
+                        variant="secondary"
+                        className="rounded-full border border-border/60 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground"
+                      >
+                        <Server className="mr-1 h-3 w-3" />
+                        {overview
+                          ? `${overview.activeQueryCount} active queries`
+                          : "No live queries"}
+                      </Badge>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={insightsOpen ? "secondary" : "outline"}
+                        className="h-8 gap-1.5 px-3 text-[11px]"
+                        data-testid="toggle-insights-button"
+                        onClick={() => setInsightsOpen((current) => !current)}
+                      >
+                        {insightsOpen ? (
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        )}
+                        {insightsOpen ? "Hide insights" : "Open insights"}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 gap-1.5 px-2.5 text-[11px]"
+                        disabled={!isTauriRuntime || overviewLoading}
+                        onClick={refreshActiveConnectionData}
+                      >
+                        {overviewLoading ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        )}
+                        Refresh
+                      </Button>
+                    </div>
+                  </div>
+
+                  {overviewError ? (
+                    <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-200">
+                      Insights could not be refreshed: {overviewError}
+                    </div>
+                  ) : null}
+                </section>
+
+                {insightsOpen ? (
+                  <div className="border-b border-border/50 bg-background/80 px-3 py-3 backdrop-blur">
+                    <div
+                      className="max-h-[38vh] overflow-auto rounded-[28px] border border-border/60 bg-card/92 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.55)]"
+                      data-testid="observability-panel"
+                    >
+                      <ConnectionOverview
+                        overview={overview}
+                        loading={overviewLoading}
+                        error={overviewError}
+                        disabled={!isTauriRuntime}
+                        onRefresh={refreshActiveConnectionData}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
                 {/* Tab bar */}
                 <div className="flex items-center border-b border-border/50 bg-muted/20">
                   <div
@@ -2715,41 +2828,6 @@ function App() {
                   </div>
                 </div>
               </div>
-
-              <aside className="flex max-h-[42vh] min-h-[300px] flex-col overflow-hidden border-t border-border/50 bg-[linear-gradient(180deg,rgba(14,20,30,0.92),rgba(8,12,20,0.96))] xl:max-h-none xl:w-[440px] xl:min-h-0 xl:border-t-0 xl:border-l">
-                <div className="border-b border-white/8 bg-black/18 px-4 py-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-100/58">
-                    Insights Dock
-                  </div>
-                  <div className="mt-1 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold tracking-tight text-white">
-                        Observability
-                      </div>
-                      <p className="mt-1 text-[11px] leading-5 text-white/48">
-                        Scroll cluster signals without pushing the query editor
-                        or results out of view.
-                      </p>
-                    </div>
-                    <Badge className="border-white/10 bg-white/6 px-2 py-0.5 text-[10px] text-white/72">
-                      Live
-                    </Badge>
-                  </div>
-                </div>
-
-                <div
-                  className="min-h-0 flex-1 overflow-auto"
-                  data-testid="observability-panel"
-                >
-                  <ConnectionOverview
-                    overview={overview}
-                    loading={overviewLoading}
-                    error={overviewError}
-                    disabled={!isTauriRuntime}
-                    onRefresh={refreshActiveConnectionData}
-                  />
-                </div>
-              </aside>
             </div>
           </>
         )}
