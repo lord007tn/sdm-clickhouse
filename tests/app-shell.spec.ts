@@ -8,6 +8,12 @@ async function installMockTauriPreview(page: Page) {
     (
       window as Window & { __SNIPPET_SAVE_CALLS__?: number }
     ).__SNIPPET_SAVE_CALLS__ = 0;
+    (
+      window as Window & { __APP_INSTALL_UPDATE_CALLS__?: number }
+    ).__APP_INSTALL_UPDATE_CALLS__ = 0;
+    (
+      window as Window & { __APP_CHECK_UPDATE_CALLS__?: number }
+    ).__APP_CHECK_UPDATE_CALLS__ = 0;
     (window as Window & { __PROMPT_CALLED__?: boolean }).__PROMPT_CALLED__ =
       false;
     window.prompt = () => {
@@ -111,6 +117,35 @@ async function installMockTauriPreview(page: Page) {
           };
         case "app_startup_status":
           return null;
+        case "trigger_update_check":
+          return null;
+        case "app_check_update":
+          (
+            window as Window & { __APP_CHECK_UPDATE_CALLS__?: number }
+          ).__APP_CHECK_UPDATE_CALLS__ =
+            ((window as Window & { __APP_CHECK_UPDATE_CALLS__?: number })
+              .__APP_CHECK_UPDATE_CALLS__ ?? 0) + 1;
+          return {
+            available: true,
+            currentVersion: "0.1.0",
+            latestVersion: "0.1.1",
+            assetName: "SDM.ClickHouse_0.1.1_x64_en-US.msi",
+            downloadUrl:
+              "https://github.com/lord007tn/sdm-clickhouse/releases/download/v0.1.1/SDM.ClickHouse_0.1.1_x64_en-US.msi",
+            sha256:
+              "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            target: "windows/x64",
+          };
+        case "app_install_update":
+          (
+            window as Window & { __APP_INSTALL_UPDATE_CALLS__?: number }
+          ).__APP_INSTALL_UPDATE_CALLS__ =
+            ((window as Window & { __APP_INSTALL_UPDATE_CALLS__?: number })
+              .__APP_INSTALL_UPDATE_CALLS__ ?? 0) + 1;
+          return {
+            message:
+              "Update installer launched (SHA256 verified): C:/Temp/sdm-clickhouse-update.msi",
+          };
         default:
           return null;
       }
@@ -149,6 +184,46 @@ test("browser preview guardrails stay interactive", async ({ page }) => {
 
   await expect(
     page.getByRole("heading", { name: "No Connections" }),
+  ).toBeVisible();
+});
+
+test("browser preview updater flow recovers and launches installer", async ({
+  page,
+}) => {
+  await installMockTauriPreview(page);
+  await page.goto("/");
+
+  const checkButton = page.getByRole("button", { name: "Check for updates" });
+  await expect(checkButton).toBeEnabled();
+  await checkButton.click();
+
+  await expect
+    .poll(async () => {
+      return await page.evaluate(
+        () =>
+          (window as Window & { __APP_CHECK_UPDATE_CALLS__?: number })
+            .__APP_CHECK_UPDATE_CALLS__ ?? 0,
+      );
+    })
+    .toBe(1);
+
+  const installButton = page.getByTestId("install-update-button");
+  await expect(installButton).toBeVisible();
+  await expect(installButton).toHaveText(/v0.1.1/);
+  await installButton.click();
+
+  await expect
+    .poll(async () => {
+      return await page.evaluate(
+        () =>
+          (window as Window & { __APP_INSTALL_UPDATE_CALLS__?: number })
+            .__APP_INSTALL_UPDATE_CALLS__ ?? 0,
+      );
+    })
+    .toBe(1);
+
+  await expect(
+    page.getByText("Installer launched", { exact: true }),
   ).toBeVisible();
 });
 

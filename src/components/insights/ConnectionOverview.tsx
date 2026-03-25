@@ -155,7 +155,10 @@ export function ConnectionOverview({
     return () => window.cancelAnimationFrame(frame);
   }, [overview]);
 
-  const storageData = withFill(overview?.storageByDatabase ?? [], STORAGE_COLORS);
+  const storageData = withFill(
+    overview?.storageByDatabase ?? [],
+    STORAGE_COLORS,
+  );
   const engineData = withFill(overview?.tablesByEngine ?? [], ENGINE_COLORS);
   const queryData = withFill(
     overview?.activeQueriesByUser ?? [],
@@ -206,7 +209,9 @@ export function ConnectionOverview({
 
           <div className="flex items-center gap-2">
             <div className="rounded-full border border-white/8 bg-white/5 px-2.5 py-1 text-[10px] text-white/58">
-              {overview ? `Updated ${formatGeneratedAt(overview.generatedAt)}` : "Awaiting signal"}
+              {overview
+                ? `Updated ${formatGeneratedAt(overview.generatedAt)}`
+                : "Awaiting signal"}
             </div>
             <Button
               size="sm"
@@ -298,11 +303,28 @@ export function ConnectionOverview({
                         value: { label: "Bytes", color: "#62c6ff" },
                       }}
                     >
-                      <AreaChart data={storageData} margin={{ left: 4, right: 8, top: 10 }}>
+                      <AreaChart
+                        data={storageData}
+                        margin={{ left: 4, right: 8, top: 10 }}
+                      >
                         <defs>
-                          <linearGradient id="storage-fill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#62c6ff" stopOpacity={0.55} />
-                            <stop offset="100%" stopColor="#62c6ff" stopOpacity={0.05} />
+                          <linearGradient
+                            id="storage-fill"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="0%"
+                              stopColor="#62c6ff"
+                              stopOpacity={0.55}
+                            />
+                            <stop
+                              offset="100%"
+                              stopColor="#62c6ff"
+                              stopOpacity={0.05}
+                            />
                           </linearGradient>
                         </defs>
                         <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -339,7 +361,9 @@ export function ConnectionOverview({
                                         Rows
                                       </div>
                                       <div className="text-xs font-medium text-foreground">
-                                        {formatCompact(payload.secondaryValue ?? 0)}
+                                        {formatCompact(
+                                          payload.secondaryValue ?? 0,
+                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -391,7 +415,10 @@ export function ConnectionOverview({
                           layout="vertical"
                           margin={{ left: 8, right: 8, top: 4, bottom: 0 }}
                         >
-                          <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                          <CartesianGrid
+                            horizontal={false}
+                            strokeDasharray="3 3"
+                          />
                           <XAxis type="number" hide />
                           <YAxis
                             dataKey="name"
@@ -400,7 +427,9 @@ export function ConnectionOverview({
                             axisLine={false}
                             width={92}
                           />
-                          <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                          <ChartTooltip
+                            content={<ChartTooltipContent hideLabel />}
+                          />
                           <Bar dataKey="value" radius={[999, 999, 999, 999]}>
                             {engineData.map((item) => (
                               <Cell key={item.name} fill={item.fill} />
@@ -423,7 +452,8 @@ export function ConnectionOverview({
                         Live query pressure
                       </div>
                       <div className="text-[11px] text-white/46">
-                        Session balance across the users currently consuming the cluster.
+                        Session balance across the users currently consuming the
+                        cluster.
                       </div>
                     </div>
                     <Activity className="h-4 w-4 text-cyan-100/54" />
@@ -434,7 +464,10 @@ export function ConnectionOverview({
                         <ChartContainer
                           className="h-36 w-full min-h-[144px]"
                           config={{
-                            value: { label: "Active queries", color: "#45f0c2" },
+                            value: {
+                              label: "Active queries",
+                              color: "#45f0c2",
+                            },
                           }}
                         >
                           <PieChart>
@@ -450,7 +483,9 @@ export function ConnectionOverview({
                                 <Cell key={item.name} fill={item.fill} />
                               ))}
                             </Pie>
-                            <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                            <ChartTooltip
+                              content={<ChartTooltipContent hideLabel />}
+                            />
                           </PieChart>
                         </ChartContainer>
                       ) : (
@@ -495,7 +530,8 @@ export function ConnectionOverview({
                       Operational signals
                     </div>
                     <div className="text-[11px] text-white/46">
-                      Fast read on query concurrency versus background mutation backlog.
+                      Fast read on query concurrency versus background mutation
+                      backlog.
                     </div>
                   </div>
                   <Layers3 className="h-4 w-4 text-white/44" />
@@ -555,7 +591,8 @@ export function ConnectionOverview({
                         {overview.serverVersion}
                       </div>
                       <div className="mt-1 text-[11px] text-white/44">
-                        Connection is reading system metadata directly from ClickHouse.
+                        Connection is reading system metadata directly from
+                        ClickHouse.
                       </div>
                     </div>
                     <div className="rounded-2xl border border-white/8 bg-black/18 p-3">
@@ -563,10 +600,12 @@ export function ConnectionOverview({
                         Catalog Surface
                       </div>
                       <div className="mt-2 text-sm font-medium text-white">
-                        {overview.databaseCount} DBs · {overview.tableCount} tables
+                        {overview.databaseCount} DBs · {overview.tableCount}{" "}
+                        tables
                       </div>
                       <div className="mt-1 text-[11px] text-white/44">
-                        Enough metadata is present to drive the next releases: filters, autocomplete, and saved workspaces.
+                        Enough metadata is present to drive the next releases:
+                        filters, autocomplete, and saved workspaces.
                       </div>
                     </div>
                   </div>
@@ -580,7 +619,8 @@ export function ConnectionOverview({
                       Tables creating the most part churn
                     </div>
                     <div className="text-[11px] text-white/46">
-                      The tables with the heaviest active-part footprint usually deserve the next operational look.
+                      The tables with the heaviest active-part footprint usually
+                      deserve the next operational look.
                     </div>
                   </div>
                   <Table2 className="h-4 w-4 text-white/50" />
@@ -598,7 +638,10 @@ export function ConnectionOverview({
                         layout="vertical"
                         margin={{ left: 12, right: 10, top: 6, bottom: 0 }}
                       >
-                        <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                        <CartesianGrid
+                          horizontal={false}
+                          strokeDasharray="3 3"
+                        />
                         <XAxis type="number" hide />
                         <YAxis
                           dataKey="name"
@@ -627,7 +670,9 @@ export function ConnectionOverview({
                                         Rows
                                       </div>
                                       <div className="text-xs font-medium text-foreground">
-                                        {formatCompact(payload.secondaryValue ?? 0)}
+                                        {formatCompact(
+                                          payload.secondaryValue ?? 0,
+                                        )}
                                       </div>
                                     </div>
                                   </div>

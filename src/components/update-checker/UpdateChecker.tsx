@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { relaunch } from "@tauri-apps/plugin-process";
-import { check } from "@tauri-apps/plugin-updater";
 import { Download, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -14,8 +12,7 @@ type UpdateCheckerProps = {
 type UpdaterState = {
   checking: boolean;
   available: boolean;
-  downloading: boolean;
-  progress: number;
+  installing: boolean;
   version?: string;
   done: boolean;
 };
@@ -27,23 +24,18 @@ export function UpdateChecker({
   const [updater, setUpdater] = useState<UpdaterState>({
     checking: false,
     available: false,
-    downloading: false,
-    progress: 0,
+    installing: false,
     done: false,
   });
 
   const mountedRef = useRef(true);
-  const checkingRef = useRef(false);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
   }, []);
-
-  useEffect(() => {
-    checkingRef.current = updater.checking;
-  }, [updater.checking]);
 
   const checkForUpdates = useCallback(
     async (manual: boolean) => {
@@ -61,16 +53,15 @@ export function UpdateChecker({
       }));
 
       try {
-        const update = await check();
+        const update = await api.appCheckUpdate();
         if (!mountedRef.current) return;
 
-        if (!update) {
+        if (!update.available) {
           setUpdater((current) => ({
             ...current,
             checking: false,
             available: false,
-            downloading: false,
-            progress: 0,
+            installing: false,
             version: undefined,
           }));
           if (manual) {
@@ -83,13 +74,12 @@ export function UpdateChecker({
           ...current,
           checking: false,
           available: true,
-          downloading: false,
-          progress: 0,
-          version: update.version,
+          installing: false,
+          version: update.latestVersion,
         }));
 
         if (manual) {
-          toast.success(`Update v${update.version} available.`);
+          toast.success(`Update v${update.latestVersion} available.`);
         }
       } catch (error) {
         if (!mountedRef.current) return;
@@ -110,91 +100,33 @@ export function UpdateChecker({
       toast.error("Updater is only available in Tauri runtime.");
       return;
     }
-    try {
-      await api.triggerUpdateCheck();
-      // Fallback in case backend event wiring is unavailable at runtime.
-      window.setTimeout(() => {
-        if (!mountedRef.current || checkingRef.current) return;
-        void checkForUpdates(true);
-      }, 1200);
-    } catch {
-      await checkForUpdates(true);
-    }
+    await checkForUpdates(true);
   }, [checkForUpdates, isTauriRuntime]);
 
-  const downloadUpdate = useCallback(async () => {
+  const installUpdate = useCallback(async () => {
     if (!isTauriRuntime) return;
 
     setUpdater((current) => ({
       ...current,
-      downloading: true,
-      progress: 0,
+      installing: true,
       done: false,
     }));
 
     try {
-      const update = await check();
-      if (!update) {
-        if (!mountedRef.current) return;
-        setUpdater((current) => ({
-          ...current,
-          downloading: false,
-          available: false,
-          progress: 0,
-          version: undefined,
-        }));
-        toast.success("You're on the latest version.");
-        return;
-      }
-
-      let contentLength = 0;
-      let downloaded = 0;
-
-      await update.downloadAndInstall((event) => {
-        if (!mountedRef.current) return;
-        if (event.event === "Started") {
-          contentLength =
-            (event.data as { contentLength?: number }).contentLength ?? 0;
-          downloaded = 0;
-          setUpdater((current) => ({
-            ...current,
-            downloading: true,
-            progress: 0,
-          }));
-          return;
-        }
-
-        if (event.event === "Progress") {
-          downloaded +=
-            (event.data as { chunkLength?: number }).chunkLength ?? 0;
-          const progress =
-            contentLength > 0
-              ? Math.round((downloaded / contentLength) * 100)
-              : 0;
-          setUpdater((current) => ({
-            ...current,
-            progress,
-          }));
-          return;
-        }
-
-        if (event.event === "Finished") {
-          setUpdater((current) => ({
-            ...current,
-            downloading: false,
-            done: true,
-            progress: 100,
-            available: false,
-          }));
-        }
-      });
-
-      await relaunch();
+      const result = await api.appInstallUpdate();
+      if (!mountedRef.current) return;
+      setUpdater((current) => ({
+        ...current,
+        installing: false,
+        done: true,
+        available: false,
+      }));
+      toast.success(result.message);
     } catch (error) {
       if (!mountedRef.current) return;
       setUpdater((current) => ({
         ...current,
-        downloading: false,
+        installing: false,
       }));
       toast.error(`Update failed: ${String(error)}`);
     }
@@ -236,26 +168,20 @@ export function UpdateChecker({
       </span>
       {updater.done ? (
         <span className="text-[10px] font-medium text-emerald-400">
-          Update installed
+          Installer launched
         </span>
-      ) : updater.downloading ? (
-        <div className="flex flex-1 items-center gap-2">
-          <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-muted/40">
-            <div
-              className="absolute inset-y-0 left-0 rounded-full bg-primary transition-all duration-300"
-              style={{ width: `${updater.progress}%` }}
-            />
-          </div>
-          <span className="text-[10px] tabular-nums text-muted-foreground">
-            {updater.progress}%
-          </span>
-        </div>
+      ) : updater.installing ? (
+        <span className="flex items-center gap-1 text-[10px] font-medium text-primary">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Launching installer
+        </span>
       ) : updater.available ? (
         <button
           className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/10"
-          onClick={() => void downloadUpdate()}
+          onClick={() => void installUpdate()}
           aria-label={`Install update version ${updater.version}`}
-          title="Download and install update"
+          title="Download and launch installer"
+          data-testid="install-update-button"
         >
           <Download className="h-3 w-3" />v{updater.version}
         </button>

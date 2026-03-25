@@ -229,7 +229,25 @@ export const api = {
 
   appRequestRestart: () => tauriInvoke<CommandMessage>("app_request_restart"),
 
-  appCheckUpdate: () => tauriInvoke<UpdateCheckResult>("app_check_update"),
+  appCheckUpdate: () =>
+    tauriInvoke<UpdateCheckResult>(
+      "app_check_update",
+      {},
+      {
+        timeoutMs: 12_000,
+        timeoutMessage:
+          "Checking for updates took too long. The UI recovered, but the updater may still be busy.",
+      },
+    ),
 
-  appInstallUpdate: () => tauriInvoke<CommandMessage>("app_install_update"),
+  appInstallUpdate: () =>
+    tauriInvoke<CommandMessage>(
+      "app_install_update",
+      {},
+      {
+        timeoutMs: 120_000,
+        timeoutMessage:
+          "Launching the update installer took too long. The UI recovered, but the updater may still be working in the background.",
+      },
+    ),
 };
