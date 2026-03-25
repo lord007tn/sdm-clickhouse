@@ -1,37 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-test("renders browser preview shell", async ({ page }) => {
-  await page.goto("/");
-
-  await expect(page.getByText("Browser preview mode.")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Add Connection" }).first(),
-  ).toBeVisible();
-  await expect(page.getByText("SDM ClickHouse")).toBeVisible();
-});
-
-test("browser preview guardrails stay interactive", async ({ page }) => {
-  await page.goto("/");
-
-  await page.getByRole("button", { name: "Check for updates" }).click();
-  await expect(
-    page.getByText("Updater is only available in Tauri runtime."),
-  ).toBeVisible();
-
-  const addConnectionButton = page
-    .locator("main")
-    .getByRole("button", { name: "Add Connection" });
-  await expect(addConnectionButton).toBeVisible();
-  await expect(addConnectionButton).toBeEnabled();
-
-  await expect(
-    page.getByRole("heading", { name: "No Connections" }),
-  ).toBeVisible();
-});
-
-test("renders query workspace with mocked tauri bridge and codemirror editor", async ({
-  page,
-}) => {
+async function installMockTauriPreview(page: Page) {
   await page.addInitScript(() => {
     (
       window as Window & { __QUERY_EXECUTE_CALLS__?: number }
@@ -42,11 +11,8 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
     (window as Window & { __PROMPT_CALLED__?: boolean }).__PROMPT_CALLED__ =
       false;
     window.prompt = () => {
-      (
-        window as Window & {
-          __PROMPT_CALLED__?: boolean;
-        }
-      ).__PROMPT_CALLED__ = true;
+      (window as Window & { __PROMPT_CALLED__?: boolean }).__PROMPT_CALLED__ =
+        true;
       return "legacy-prompt";
     };
 
@@ -87,7 +53,7 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
             activePartCount: 18,
             activeQueryCount: 2,
             pendingMutationCount: 1,
-            totalRows: 42800,
+            totalRows: 42_800,
             totalBytes: 268435456,
             storageByDatabase: [
               { name: "default", value: 201326592, secondaryValue: 32500 },
@@ -113,45 +79,29 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
           return [];
         case "query_execute":
           (
-            window as Window & {
-              __QUERY_EXECUTE_CALLS__?: number;
-            }
+            window as Window & { __QUERY_EXECUTE_CALLS__?: number }
           ).__QUERY_EXECUTE_CALLS__ =
-            (
-              window as Window & {
-                __QUERY_EXECUTE_CALLS__?: number;
-              }
-            ).__QUERY_EXECUTE_CALLS__ ?? 0;
-          (
-            window as Window & {
-              __QUERY_EXECUTE_CALLS__?: number;
-            }
-          ).__QUERY_EXECUTE_CALLS__ += 1;
+            ((window as Window & { __QUERY_EXECUTE_CALLS__?: number })
+              .__QUERY_EXECUTE_CALLS__ ?? 0) + 1;
           return {
             queryId: "query-1",
-            columns: ["value"],
-            rows: [{ value: 1 }],
-            rowCount: 1,
+            columns: ["service", "latency_ms", "status"],
+            rows: [
+              { service: "alpha", latency_ms: 32, status: "ok" },
+              { service: "beta", latency_ms: 4, status: "retrying" },
+              { service: "gamma", latency_ms: 18, status: "ok" },
+            ],
+            rowCount: 3,
             page: 1,
             pageSize: 100,
             durationMs: 2,
           };
         case "snippet_save":
           (
-            window as Window & {
-              __SNIPPET_SAVE_CALLS__?: number;
-            }
+            window as Window & { __SNIPPET_SAVE_CALLS__?: number }
           ).__SNIPPET_SAVE_CALLS__ =
-            (
-              window as Window & {
-                __SNIPPET_SAVE_CALLS__?: number;
-              }
-            ).__SNIPPET_SAVE_CALLS__ ?? 0;
-          (
-            window as Window & {
-              __SNIPPET_SAVE_CALLS__?: number;
-            }
-          ).__SNIPPET_SAVE_CALLS__ += 1;
+            ((window as Window & { __SNIPPET_SAVE_CALLS__?: number })
+              .__SNIPPET_SAVE_CALLS__ ?? 0) + 1;
           return {
             id: "snippet-1",
             name: "Test snippet",
@@ -171,7 +121,41 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
       configurable: true,
     });
   });
+}
 
+test("renders browser preview shell", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByText("Browser preview mode.")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add Connection" }).first(),
+  ).toBeVisible();
+  await expect(page.getByText("SDM ClickHouse")).toBeVisible();
+});
+
+test("browser preview guardrails stay interactive", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Check for updates" }).click();
+  await expect(
+    page.getByText("Updater is only available in Tauri runtime."),
+  ).toBeVisible();
+
+  const addConnectionButton = page
+    .locator("main")
+    .getByRole("button", { name: "Add Connection" });
+  await expect(addConnectionButton).toBeVisible();
+  await expect(addConnectionButton).toBeEnabled();
+
+  await expect(
+    page.getByRole("heading", { name: "No Connections" }),
+  ).toBeVisible();
+});
+
+test("renders query workspace with mocked tauri bridge and codemirror editor", async ({
+  page,
+}) => {
+  await installMockTauriPreview(page);
   await page.goto("/");
 
   const sqlEditor = page.getByTestId("sql-editor");
@@ -188,11 +172,8 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
     .poll(async () => {
       return await page.evaluate(
         () =>
-          (
-            window as Window & {
-              __QUERY_EXECUTE_CALLS__?: number;
-            }
-          ).__QUERY_EXECUTE_CALLS__ ?? 0,
+          (window as Window & { __QUERY_EXECUTE_CALLS__?: number })
+            .__QUERY_EXECUTE_CALLS__ ?? 0,
       );
     })
     .toBe(1);
@@ -209,22 +190,63 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
     .poll(async () => {
       return await page.evaluate(
         () =>
-          (
-            window as Window & {
-              __SNIPPET_SAVE_CALLS__?: number;
-            }
-          ).__SNIPPET_SAVE_CALLS__ ?? 0,
+          (window as Window & { __SNIPPET_SAVE_CALLS__?: number })
+            .__SNIPPET_SAVE_CALLS__ ?? 0,
       );
     })
     .toBe(1);
   expect(
     await page.evaluate(
       () =>
-        (
-          window as Window & {
-            __PROMPT_CALLED__?: boolean;
-          }
-        ).__PROMPT_CALLED__ ?? false,
+        (window as Window & { __PROMPT_CALLED__?: boolean })
+          .__PROMPT_CALLED__ ?? false,
     ),
   ).toBe(false);
+});
+
+test("filters and sorts result rows in browser preview", async ({ page }) => {
+  await installMockTauriPreview(page);
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Run" }).click();
+  await expect(page.getByTestId("results-filter-input")).toBeVisible();
+  await expect(page.getByTestId("results-count-badge")).toHaveText(
+    /3 \/ 3 rows/,
+  );
+
+  const rows = page
+    .locator("tbody tr")
+    .filter({ has: page.locator('[data-slot="table-cell"]') });
+  await expect(rows).toHaveCount(3);
+  await expect(rows.first()).toContainText("alpha");
+
+  await page.getByTestId("results-filter-input").fill("ga");
+  await expect(page.getByTestId("results-count-badge")).toHaveText(
+    /1 \/ 3 rows/,
+  );
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("gamma");
+
+  await page.getByTestId("results-filter-input").fill("");
+  await expect(page.getByTestId("results-count-badge")).toHaveText(
+    /3 \/ 3 rows/,
+  );
+  await expect(rows).toHaveCount(3);
+
+  const latencySortButton = page.getByRole("button", {
+    name: "Sort by latency_ms",
+  });
+  await latencySortButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("results-sort-summary")).toHaveText(
+    "latency_ms asc",
+  );
+  await expect(rows.first()).toContainText("beta");
+
+  await latencySortButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("results-sort-summary")).toHaveText(
+    "latency_ms desc",
+  );
+  await expect(rows.first()).toContainText("alpha");
 });

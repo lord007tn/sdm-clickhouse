@@ -3,11 +3,18 @@ import {
   type ColumnDef,
   flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  type Row,
+  type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { confirm, open, save } from "@tauri-apps/plugin-dialog";
 import {
+  ArrowDownWideNarrow,
+  ArrowUpDown,
+  ArrowUpNarrowWide,
   Check,
   ChevronDown,
   ChevronRight,
@@ -130,6 +137,18 @@ type OpsDraft = {
 
 const EMPTY_RESULT_ROWS: ResultRow[] = [];
 const EMPTY_RESULT_COLUMNS: ColumnDef<ResultRow>[] = [];
+
+function formatResultValue(value: unknown) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "[unserializable]";
+    }
+  }
+  return String(value);
+}
 
 function Skeleton({
   className,
@@ -290,6 +309,8 @@ function App() {
   /* ── Inline editing state ── */
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [selectedRowIdx, setSelectedRowIdx] = useState<number | null>(null);
+  const [resultFilter, setResultFilter] = useState("");
+  const [resultSorting, setResultSorting] = useState<SortingState>([]);
   const savePendingRef = useRef(false);
   const resultContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -332,15 +353,70 @@ function App() {
     return columns.map((column) => ({
       id: column,
       accessorKey: column,
-      header: column,
+      sortDescFirst: false,
+      header: ({ column: headerColumn }) => {
+        const sorted = headerColumn.getIsSorted();
+        const SortIcon =
+          sorted === "asc"
+            ? ArrowUpNarrowWide
+            : sorted === "desc"
+              ? ArrowDownWideNarrow
+              : ArrowUpDown;
+        return (
+          <button
+            type="button"
+            className={cn(
+              "group/result-header flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-background/80",
+              sorted && "bg-background/80 text-foreground shadow-xs",
+            )}
+            onClick={headerColumn.getToggleSortingHandler()}
+            title={`Sort by ${column}`}
+            aria-label={`Sort by ${column}`}
+          >
+            <span className="truncate">{column}</span>
+            <SortIcon
+              className={cn(
+                "ml-auto h-3.5 w-3.5 text-muted-foreground transition-colors group-hover/result-header:text-foreground",
+                sorted && "text-foreground",
+              )}
+            />
+          </button>
+        );
+      },
     }));
   }, [activeTab?.result?.columns]);
   const resultTable = useReactTable<ResultRow>({
     data: resultData,
     columns: resultColumns,
+    state: {
+      globalFilter: resultFilter,
+      sorting: resultSorting,
+    },
+    onGlobalFilterChange: setResultFilter,
+    onSortingChange: setResultSorting,
+    globalFilterFn: (row, _columnId, filterValue) => {
+      const normalizedFilter = String(filterValue ?? "")
+        .trim()
+        .toLowerCase();
+      if (!normalizedFilter) return true;
+      return (
+        activeTab?.result?.columns?.some((column) =>
+          formatResultValue(row.original[column])
+            .toLowerCase()
+            .includes(normalizedFilter),
+        ) ?? false
+      );
+    },
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
   });
   const resultTableRows = resultTable.getRowModel().rows;
+  const visibleResultCount = resultTableRows.length;
+  const totalResultCount = resultData.length;
+  const activeResultFilter = resultFilter.trim();
+  const primaryResultSort = resultSorting[0];
+  const useVirtualizedResultRows = resultTableRows.length > 200;
   const rowHeightPx = 30;
   const rowVirtualizer = useVirtualizer({
     count: resultTableRows.length,
@@ -368,6 +444,121 @@ function App() {
     () => selectedTableColumns.map((column) => column.name),
     [selectedTableColumns],
   );
+
+  const renderResultRow = (row: Row<ResultRow>, rowHeight?: number) => {
+    const idx = row.index;
+    const isPendingDelete = pendingDeletes.has(idx);
+
+    return (
+      <TableRow
+        key={row.id}
+        role="button"
+        tabIndex={0}
+        style={rowHeight ? { height: rowHeight } : undefined}
+        className={cn(
+          "cursor-pointer transition-colors",
+          isPendingDelete
+            ? "bg-destructive/5 hover:bg-destructive/10"
+            : selectedRowIdx === idx
+              ? "bg-primary/10 hover:bg-primary/15"
+              : "hover:bg-muted/30",
+        )}
+        onClick={() => setSelectedRowIdx(selectedRowIdx === idx ? null : idx)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setSelectedRowIdx(selectedRowIdx === idx ? null : idx);
+          }
+        }}
+      >
+        {row.getVisibleCells().map((cell) => {
+          const col = String(cell.column.id);
+          const cellKey = `${idx}:${col}`;
+          const pendingEdit = pendingEdits.get(cellKey);
+          const isEditing =
+            editingCell?.rowIdx === idx && editingCell?.col === col;
+          const cellValue = row.original[col];
+          const displayValue =
+            pendingEdit !== undefined
+              ? pendingEdit.newValue === null
+                ? "NULL"
+                : typeof pendingEdit.newValue === "object"
+                  ? JSON.stringify(pendingEdit.newValue)
+                  : String(pendingEdit.newValue)
+              : formatResultValue(cellValue);
+
+          return (
+            <TableCell
+              key={cellKey}
+              className="mono max-w-[300px] whitespace-nowrap p-0 text-xs"
+            >
+              {isEditing ? (
+                <input
+                  className="mono h-full w-full min-w-[80px] border-2 border-primary bg-primary/5 px-2 py-1.5 text-xs outline-none"
+                  value={editingCell.value}
+                  disabled={editingCell.saving}
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) =>
+                    setEditingCell({
+                      ...editingCell,
+                      value: e.currentTarget.value,
+                    })
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      storePendingEdit(editingCell);
+                    }
+                    if (e.key === "Escape") {
+                      setEditingCell(null);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!savePendingRef.current) {
+                      storePendingEdit(editingCell);
+                    }
+                  }}
+                />
+              ) : (
+                <div
+                  className={cn(
+                    "truncate px-2 py-1.5",
+                    isPendingDelete &&
+                      "line-through text-muted-foreground/40 decoration-destructive/60",
+                    !isPendingDelete &&
+                      pendingEdit !== undefined &&
+                      "bg-amber-500/8 text-amber-200",
+                  )}
+                  onDoubleClick={(e) => {
+                    if (isPendingDelete) return;
+                    e.stopPropagation();
+                    const editValue =
+                      pendingEdit !== undefined
+                        ? String(pendingEdit.newValue ?? "")
+                        : displayValue;
+                    setEditingCell({
+                      rowIdx: idx,
+                      col,
+                      value: editValue,
+                      saving: false,
+                    });
+                  }}
+                  title={
+                    isPendingDelete
+                      ? "Marked for deletion"
+                      : "Double-click to edit"
+                  }
+                >
+                  {displayValue}
+                </div>
+              )}
+            </TableCell>
+          );
+        })}
+      </TableRow>
+    );
+  };
 
   /* ── Data loading ── */
   const refreshConnectionHealth = useCallback(
@@ -586,6 +777,11 @@ function App() {
   }, [activeTabId, activeConnectionId]);
 
   useEffect(() => {
+    setResultFilter("");
+    setResultSorting([]);
+  }, [activeConnectionId, activeTab?.result?.queryId, activeTabId]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const minimalTabs = tabs.map((tab) => ({
       id: tab.id,
@@ -608,7 +804,8 @@ function App() {
     if (resultContainerRef.current) {
       resultContainerRef.current.scrollTop = 0;
     }
-  }, [activeTab?.result?.queryId, activeTabId]);
+    setEditingCell(null);
+  }, [activeTab?.result?.queryId, activeTabId, resultFilter, resultSorting]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -1167,10 +1364,7 @@ function App() {
       setEditingCell(null);
       return;
     }
-    const originalDisplayValue =
-      typeof originalRow[cell.col] === "object"
-        ? JSON.stringify(originalRow[cell.col])
-        : String(originalRow[cell.col] ?? "");
+    const originalDisplayValue = formatResultValue(originalRow[cell.col]);
 
     // If value unchanged, remove any pending edit for this cell
     if (cell.value === originalDisplayValue) {
@@ -2179,6 +2373,53 @@ function App() {
               )}
 
               {/* Results table */}
+              {activeTab?.result?.columns?.length ? (
+                <div className="border-b border-border/50 bg-background/80 px-3 py-2 backdrop-blur">
+                  <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+                    <div className="relative min-w-0 flex-1">
+                      <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={resultFilter}
+                        onChange={(event) =>
+                          setResultFilter(event.currentTarget.value)
+                        }
+                        placeholder="Filter rows across the visible result set"
+                        className="h-8 border-border/70 bg-muted/30 pr-9 pl-8 text-xs"
+                        data-testid="results-filter-input"
+                        aria-label="Filter result rows"
+                      />
+                      {activeResultFilter ? (
+                        <button
+                          type="button"
+                          className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                          onClick={() => setResultFilter("")}
+                          aria-label="Clear result filter"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      <Badge
+                        variant="secondary"
+                        className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-1 font-medium text-foreground"
+                        data-testid="results-count-badge"
+                      >
+                        {visibleResultCount} / {totalResultCount} rows
+                      </Badge>
+                      <div className="flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-muted-foreground">
+                        <Sparkles className="h-3 w-3" />
+                        <span data-testid="results-sort-summary">
+                          {primaryResultSort
+                            ? `${primaryResultSort.id} ${primaryResultSort.desc ? "desc" : "asc"}`
+                            : "Natural order"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               <div ref={resultContainerRef} className="flex-1 overflow-auto">
                 {activeTab?.running ? (
                   <div className="p-3">
@@ -2214,149 +2455,54 @@ function App() {
                       ))}
                     </TableHeader>
                     <TableBody>
-                      {virtualPaddingTop > 0 ? (
+                      {resultTableRows.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={resultTable.getAllLeafColumns().length}
-                            style={{ height: virtualPaddingTop }}
-                          />
-                        </TableRow>
-                      ) : null}
-                      {virtualRows.map((virtualRow) => {
-                        const row = resultTableRows[virtualRow.index];
-                        if (!row) return null;
-                        const idx = row.index;
-                        const isPendingDelete = pendingDeletes.has(idx);
-                        return (
-                          <TableRow
-                            key={row.id}
-                            role="button"
-                            tabIndex={0}
-                            style={{ height: virtualRow.size }}
-                            className={cn(
-                              "cursor-pointer transition-colors",
-                              isPendingDelete
-                                ? "bg-destructive/5 hover:bg-destructive/10"
-                                : selectedRowIdx === idx
-                                  ? "bg-primary/10 hover:bg-primary/15"
-                                  : "hover:bg-muted/30",
-                            )}
-                            onClick={() =>
-                              setSelectedRowIdx(
-                                selectedRowIdx === idx ? null : idx,
-                              )
+                            colSpan={
+                              resultTable.getAllLeafColumns().length || 1
                             }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                setSelectedRowIdx(
-                                  selectedRowIdx === idx ? null : idx,
-                                );
-                              }
-                            }}
+                            className="h-28 text-center text-xs text-muted-foreground"
                           >
-                            {row.getVisibleCells().map((cell) => {
-                              const col = String(cell.column.id);
-                              const cellKey = `${idx}:${col}`;
-                              const pendingEdit = pendingEdits.get(cellKey);
-                              const isEditing =
-                                editingCell?.rowIdx === idx &&
-                                editingCell?.col === col;
-                              const cellValue = row.original[col];
-
-                              // Show pending value if it exists, otherwise original
-                              const displayValue =
-                                pendingEdit !== undefined
-                                  ? pendingEdit.newValue === null
-                                    ? "NULL"
-                                    : typeof pendingEdit.newValue === "object"
-                                      ? JSON.stringify(pendingEdit.newValue)
-                                      : String(pendingEdit.newValue)
-                                  : typeof cellValue === "object"
-                                    ? JSON.stringify(cellValue)
-                                    : String(cellValue ?? "");
-
-                              return (
-                                <TableCell
-                                  key={cellKey}
-                                  className="mono max-w-[300px] whitespace-nowrap p-0 text-xs"
-                                >
-                                  {isEditing ? (
-                                    <input
-                                      className="mono h-full w-full min-w-[80px] border-2 border-primary bg-primary/5 px-2 py-1.5 text-xs outline-none"
-                                      value={editingCell.value}
-                                      disabled={editingCell.saving}
-                                      autoFocus
-                                      onClick={(e) => e.stopPropagation()}
-                                      onChange={(e) =>
-                                        setEditingCell({
-                                          ...editingCell,
-                                          value: e.currentTarget.value,
-                                        })
-                                      }
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          e.preventDefault();
-                                          storePendingEdit(editingCell);
-                                        }
-                                        if (e.key === "Escape") {
-                                          setEditingCell(null);
-                                        }
-                                      }}
-                                      onBlur={() => {
-                                        if (!savePendingRef.current) {
-                                          storePendingEdit(editingCell);
-                                        }
-                                      }}
-                                    />
-                                  ) : (
-                                    <div
-                                      className={cn(
-                                        "truncate px-2 py-1.5",
-                                        isPendingDelete &&
-                                          "line-through text-muted-foreground/40 decoration-destructive/60",
-                                        !isPendingDelete &&
-                                          pendingEdit !== undefined &&
-                                          "bg-amber-500/8 text-amber-200",
-                                      )}
-                                      onDoubleClick={(e) => {
-                                        if (isPendingDelete) return;
-                                        e.stopPropagation();
-                                        // Edit the pending value if it exists
-                                        const editValue =
-                                          pendingEdit !== undefined
-                                            ? String(pendingEdit.newValue ?? "")
-                                            : displayValue;
-                                        setEditingCell({
-                                          rowIdx: idx,
-                                          col,
-                                          value: editValue,
-                                          saving: false,
-                                        });
-                                      }}
-                                      title={
-                                        isPendingDelete
-                                          ? "Marked for deletion"
-                                          : "Double-click to edit"
-                                      }
-                                    >
-                                      {displayValue}
-                                    </div>
-                                  )}
-                                </TableCell>
-                              );
-                            })}
-                          </TableRow>
-                        );
-                      })}
-                      {virtualPaddingBottom > 0 ? (
-                        <TableRow>
-                          <TableCell
-                            colSpan={resultTable.getAllLeafColumns().length}
-                            style={{ height: virtualPaddingBottom }}
-                          />
+                            {activeResultFilter
+                              ? `No rows match "${activeResultFilter}".`
+                              : "No rows returned for this query."}
+                          </TableCell>
                         </TableRow>
-                      ) : null}
+                      ) : (
+                        <>
+                          {useVirtualizedResultRows ? (
+                            <>
+                              {virtualPaddingTop > 0 ? (
+                                <TableRow>
+                                  <TableCell
+                                    colSpan={
+                                      resultTable.getAllLeafColumns().length
+                                    }
+                                    style={{ height: virtualPaddingTop }}
+                                  />
+                                </TableRow>
+                              ) : null}
+                              {virtualRows.map((virtualRow) => {
+                                const row = resultTableRows[virtualRow.index];
+                                if (!row) return null;
+                                return renderResultRow(row, virtualRow.size);
+                              })}
+                              {virtualPaddingBottom > 0 ? (
+                                <TableRow>
+                                  <TableCell
+                                    colSpan={
+                                      resultTable.getAllLeafColumns().length
+                                    }
+                                    style={{ height: virtualPaddingBottom }}
+                                  />
+                                </TableRow>
+                              ) : null}
+                            </>
+                          ) : (
+                            resultTableRows.map((row) => renderResultRow(row))
+                          )}
+                        </>
+                      )}
                     </TableBody>
                   </Table>
                 ) : (
