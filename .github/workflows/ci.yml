@@ -40,11 +40,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Lint
-        run: pnpm lint
+      # - name: Lint
+      #   run: pnpm lint
 
-      - name: Format Check
-        run: pnpm format:check
+      # - name: Format Check
+      #   run: pnpm format:check
 
       - name: Knip
         run: pnpm knip

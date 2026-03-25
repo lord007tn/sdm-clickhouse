@@ -6,10 +6,8 @@ import "@fontsource/jetbrains-mono";
 import { Toaster } from "sonner";
 import App from "./App";
 import "./index.css";
-import { installDogfoodRuntime } from "@/dogfood/installDogfoodRuntime";
 
 const queryClient = new QueryClient();
-installDogfoodRuntime();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

@@ -28,9 +28,5 @@ _tmp*
 *.njsproj
 *.sln
 *.sw?
-dogfood-output/
-.agents/
-.claude/
 skills-lock.json
-.agents/skills/dogfood/
-.claude/skills/dogfood/
+.dogfood-output

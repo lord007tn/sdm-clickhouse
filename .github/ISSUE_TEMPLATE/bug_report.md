@@ -26,7 +26,7 @@ What happened instead?
 
 ## Environment
 
-- App version: v0.1.0
+- App version: v0.0.0
 - OS: (Windows/macOS/Linux + version)
 - ClickHouse version: (if known)
 - Connection mode: HTTP / HTTPS
