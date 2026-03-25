@@ -199,6 +199,26 @@ pub struct UpdateCheckResult {
     pub download_url: Option<String>,
     pub sha256: Option<String>,
     pub target: String,
+    pub downloaded: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDownloadResult {
+    pub message: String,
+    pub version: String,
+    pub asset_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDownloadProgress {
+    pub status: String,
+    pub version: Option<String>,
+    pub asset_name: Option<String>,
+    pub downloaded_bytes: u64,
+    pub total_bytes: Option<u64>,
+    pub progress_percent: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

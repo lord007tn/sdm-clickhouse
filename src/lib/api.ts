@@ -16,6 +16,7 @@ import type {
   SnippetInput,
   SnippetItem,
   UpdateCheckResult,
+  UpdateDownloadResult,
 } from "@/types";
 
 function isTauriRuntime() {
@@ -237,6 +238,17 @@ export const api = {
         timeoutMs: 12_000,
         timeoutMessage:
           "Checking for updates took too long. The UI recovered, but the updater may still be busy.",
+      },
+    ),
+
+  appDownloadUpdate: () =>
+    tauriInvoke<UpdateDownloadResult>(
+      "app_download_update",
+      {},
+      {
+        timeoutMs: 300_000,
+        timeoutMessage:
+          "Downloading the update took too long. The UI recovered, but the updater may still be working in the background.",
       },
     ),
 

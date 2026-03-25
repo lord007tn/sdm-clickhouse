@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.4] - 2026-03-25
+
+### Added
+
+- Two-step updater flow: download the new release first, show a compact download progress rail, then switch the CTA to install the verified package.
+- Backend update-download progress events and cached installer state so the verified asset can be launched without downloading it again.
+
+### Fixed
+
+- Replaced the old one-click download-and-install updater path with a clearer sequence that matches the real updater lifecycle.
+- Added a browser-preview regression covering check, download, progress UI, install, and installer launch.
+
 ## [0.1.3] - 2026-03-25
 
 ### Changed
@@ -58,5 +70,6 @@ All notable changes to this project are documented in this file.
 
 [0.0.0]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.0.0
 [0.1.0]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.0
+[0.1.4]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.4
 [0.1.2]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.2
 [0.1.3]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.3

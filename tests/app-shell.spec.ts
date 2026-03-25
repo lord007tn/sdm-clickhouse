@@ -9,8 +9,14 @@ async function installMockTauriPreview(page: Page) {
       window as Window & { __SNIPPET_SAVE_CALLS__?: number }
     ).__SNIPPET_SAVE_CALLS__ = 0;
     (
+      window as Window & { __APP_DOWNLOAD_UPDATE_CALLS__?: number }
+    ).__APP_DOWNLOAD_UPDATE_CALLS__ = 0;
+    (
       window as Window & { __APP_INSTALL_UPDATE_CALLS__?: number }
     ).__APP_INSTALL_UPDATE_CALLS__ = 0;
+    (
+      window as Window & { __APP_DOWNLOAD_UPDATE_DELAY_MS__?: number }
+    ).__APP_DOWNLOAD_UPDATE_DELAY_MS__ = 300;
     (
       window as Window & { __APP_CHECK_UPDATE_CALLS__?: number }
     ).__APP_CHECK_UPDATE_CALLS__ = 0;
@@ -146,6 +152,25 @@ async function installMockTauriPreview(page: Page) {
             message:
               "Update installer launched (SHA256 verified): C:/Temp/sdm-clickhouse-update.msi",
           };
+        case "app_download_update":
+          (
+            window as Window & { __APP_DOWNLOAD_UPDATE_CALLS__?: number }
+          ).__APP_DOWNLOAD_UPDATE_CALLS__ =
+            ((window as Window & { __APP_DOWNLOAD_UPDATE_CALLS__?: number })
+              .__APP_DOWNLOAD_UPDATE_CALLS__ ?? 0) + 1;
+          await new Promise((resolve) =>
+            window.setTimeout(
+              resolve,
+              (window as Window & { __APP_DOWNLOAD_UPDATE_DELAY_MS__?: number })
+                .__APP_DOWNLOAD_UPDATE_DELAY_MS__ ?? 300,
+            ),
+          );
+          return {
+            message:
+              "Update downloaded and verified: C:/Temp/sdm-clickhouse-update.msi",
+            version: "0.1.1",
+            assetName: "SDM.ClickHouse_0.1.1_x64_en-US.msi",
+          };
         default:
           return null;
       }
@@ -187,7 +212,7 @@ test("browser preview guardrails stay interactive", async ({ page }) => {
   ).toBeVisible();
 });
 
-test("browser preview updater flow recovers and launches installer", async ({
+test("browser preview updater downloads then launches installer", async ({
   page,
 }) => {
   await installMockTauriPreview(page);
@@ -207,9 +232,27 @@ test("browser preview updater flow recovers and launches installer", async ({
     })
     .toBe(1);
 
+  const downloadButton = page.getByTestId("download-update-button");
+  await expect(downloadButton).toBeVisible();
+  await expect(downloadButton).toHaveText(/Update v0.1.1/);
+  await downloadButton.click();
+
+  await expect(page.getByTestId("update-download-progress")).toBeVisible();
+
+  await expect
+    .poll(async () => {
+      return await page.evaluate(
+        () =>
+          (window as Window & { __APP_DOWNLOAD_UPDATE_CALLS__?: number })
+            .__APP_DOWNLOAD_UPDATE_CALLS__ ?? 0,
+      );
+    })
+    .toBe(1);
+
   const installButton = page.getByTestId("install-update-button");
   await expect(installButton).toBeVisible();
-  await expect(installButton).toHaveText(/v0.1.1/);
+  await expect(installButton).toHaveText(/Install v0.1.1/);
+  await expect(page.getByTestId("update-download-progress")).toHaveCount(0);
   await installButton.click();
 
   await expect

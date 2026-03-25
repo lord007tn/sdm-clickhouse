@@ -154,6 +154,22 @@ export type UpdateCheckResult = {
   downloadUrl?: string;
   sha256?: string;
   target: string;
+  downloaded?: boolean;
+};
+
+export type UpdateDownloadResult = {
+  message: string;
+  version: string;
+  assetName: string;
+};
+
+export type UpdateDownloadProgress = {
+  status: "starting" | "downloading" | "verifying" | "ready";
+  version?: string;
+  assetName?: string;
+  downloadedBytes: number;
+  totalBytes?: number;
+  progressPercent?: number;
 };
 
 export type OverviewDatum = {

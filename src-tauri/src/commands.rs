@@ -21,9 +21,9 @@ use crate::models::{
     AppLogItem, AuditItem, ClickHouseOverview, CommandMessage, ConnectionDiagnostics,
     ConnectionExport, ConnectionInput, ConnectionProfile, CountPreview, DdlRequest, HistoryItem,
     MutationRequest, OverviewDatum, QueryRequest, QueryResult, SnippetInput, SnippetItem,
-    UpdateCheckResult,
+    UpdateCheckResult, UpdateDownloadProgress, UpdateDownloadResult,
 };
-use crate::AppState;
+use crate::{AppState, PendingUpdate};
 
 const KEYRING_SERVICE: &str = "sdm-clickhouse";
 const KEYRING_READ_TIMEOUT_MS: u64 = 1_500;
@@ -1414,38 +1414,33 @@ pub async fn clickhouse_overview(
         FORMAT JSON
     "#;
 
-    let summary =
-        execute_sql_json(&profile, &password, summary_sql, profile.timeout_ms, None)
-            .await
-            .map_err(format_categorized_error)?;
-    let storage =
-        execute_sql_json(&profile, &password, storage_sql, profile.timeout_ms, None)
-            .await
-            .map_err(format_categorized_error)?;
-    let engines =
-        execute_sql_json(&profile, &password, engine_sql, profile.timeout_ms, None)
-            .await
-            .map_err(format_categorized_error)?;
-    let hottest_tables =
-        execute_sql_json(
-            &profile,
-            &password,
-            hottest_tables_sql,
-            profile.timeout_ms,
-            None,
-        )
+    let summary = execute_sql_json(&profile, &password, summary_sql, profile.timeout_ms, None)
         .await
         .map_err(format_categorized_error)?;
-    let active_queries =
-        execute_sql_json(
-            &profile,
-            &password,
-            active_queries_sql,
-            profile.timeout_ms,
-            None,
-        )
+    let storage = execute_sql_json(&profile, &password, storage_sql, profile.timeout_ms, None)
         .await
         .map_err(format_categorized_error)?;
+    let engines = execute_sql_json(&profile, &password, engine_sql, profile.timeout_ms, None)
+        .await
+        .map_err(format_categorized_error)?;
+    let hottest_tables = execute_sql_json(
+        &profile,
+        &password,
+        hottest_tables_sql,
+        profile.timeout_ms,
+        None,
+    )
+    .await
+    .map_err(format_categorized_error)?;
+    let active_queries = execute_sql_json(
+        &profile,
+        &password,
+        active_queries_sql,
+        profile.timeout_ms,
+        None,
+    )
+    .await
+    .map_err(format_categorized_error)?;
 
     let summary_row = summary.rows.first().cloned().unwrap_or(Value::Null);
     let server_version = extract_string_row(&summary_row, "server_version", "unknown");
@@ -1467,13 +1462,7 @@ pub async fn clickhouse_overview(
             Some("secondary_value"),
             "Database",
         ),
-        tables_by_engine: extract_overview_series(
-            &engines.rows,
-            "name",
-            "value",
-            None,
-            "Engine",
-        ),
+        tables_by_engine: extract_overview_series(&engines.rows, "name", "value", None, "Engine"),
         hottest_tables_by_parts: extract_overview_series(
             &hottest_tables.rows,
             "name",
@@ -1689,7 +1678,7 @@ pub fn trigger_update_check(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheckResult, String> {
+pub async fn app_check_update(state: State<'_, AppState>) -> Result<UpdateCheckResult, String> {
     let current_version = env!("CARGO_PKG_VERSION").to_string();
     let (os, arch, target) = runtime_target();
     let prefer_portable = updater_prefers_portable();
@@ -1702,6 +1691,7 @@ pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheck
             download_url: None,
             sha256: None,
             target,
+            downloaded: false,
         });
     }
 
@@ -1718,7 +1708,26 @@ pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheck
             download_url: None,
             sha256: None,
             target,
+            downloaded: false,
         });
+    };
+
+    let downloaded = match state.pending_update.lock() {
+        Ok(mut pending_update) => {
+            let matches = pending_update
+                .as_ref()
+                .map(|pending| {
+                    pending.version == latest_version
+                        && pending.asset_name == asset.name
+                        && pending.installer_path.exists()
+                })
+                .unwrap_or(false);
+            if !matches {
+                *pending_update = None;
+            }
+            matches
+        }
+        Err(_) => false,
     };
 
     Ok(UpdateCheckResult {
@@ -1729,10 +1738,103 @@ pub async fn app_check_update(_state: State<'_, AppState>) -> Result<UpdateCheck
         download_url: Some(asset.browser_download_url.clone()),
         sha256: Some(sha256),
         target,
+        downloaded,
     })
 }
 
-async fn download_release_asset(download_url: &str) -> Result<Vec<u8>, String> {
+#[derive(Debug, Clone)]
+struct ResolvedUpdateAsset {
+    repo: String,
+    latest_version: String,
+    asset: GithubReleaseAsset,
+    sha256: String,
+}
+
+async fn resolve_update_asset(current_version: &str) -> Result<ResolvedUpdateAsset, String> {
+    let (os, arch, _) = runtime_target();
+    let prefer_portable = updater_prefers_portable();
+    if os == "unknown" || arch == "unknown" {
+        return Err("Updater is not available on this runtime target.".to_string());
+    }
+
+    let repo = resolve_updater_repo();
+    let releases = fetch_releases(&repo).await?;
+    let Some((_release, asset, latest_version, sha256)) =
+        select_release_for_target(&releases, current_version, os, arch, prefer_portable)
+    else {
+        return Err("No newer update is available for this runtime target.".to_string());
+    };
+
+    Ok(ResolvedUpdateAsset {
+        repo,
+        latest_version,
+        asset: asset.clone(),
+        sha256,
+    })
+}
+
+fn validate_resolved_asset(
+    repo: &str,
+    asset: &GithubReleaseAsset,
+    sha256: &str,
+) -> Result<(), String> {
+    let parsed_url = reqwest::Url::parse(asset.browser_download_url.trim())
+        .map_err(|_| "Resolved release asset URL is invalid.".to_string())?;
+    if parsed_url.scheme() != "https" {
+        return Err("Resolved release asset URL must use HTTPS.".to_string());
+    }
+    let host = parsed_url
+        .host_str()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if host != "github.com" {
+        return Err("Resolved release asset URL is not hosted on GitHub.".to_string());
+    }
+    let normalized_repo = repo.to_ascii_lowercase();
+    if !parsed_url
+        .path()
+        .to_ascii_lowercase()
+        .contains(&format!("/{normalized_repo}/releases/download/"))
+    {
+        return Err(
+            "Resolved release asset URL does not match configured updater repository.".to_string(),
+        );
+    }
+    let expected_hash = sha256.trim().to_ascii_lowercase();
+    if expected_hash.len() != 64 || !expected_hash.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err("Resolved release asset SHA256 is invalid.".to_string());
+    }
+    Ok(())
+}
+
+fn sanitize_asset_name(asset_name: &str) -> Result<String, String> {
+    let safe_name = asset_name
+        .trim()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    if safe_name.is_empty() {
+        return Err("Resolved release asset name is invalid.".to_string());
+    }
+    Ok(safe_name)
+}
+
+fn emit_update_download_progress(app: &tauri::AppHandle, progress: UpdateDownloadProgress) {
+    let _ = app.emit("update-download-progress", progress);
+}
+
+async fn download_release_asset(
+    app: &tauri::AppHandle,
+    download_url: &str,
+    version: &str,
+    asset_name: &str,
+) -> Result<Vec<u8>, String> {
     let response = github_api_request(download_url)
         .header("Accept", "application/octet-stream")
         .send()
@@ -1744,11 +1846,54 @@ async fn download_release_asset(download_url: &str) -> Result<Vec<u8>, String> {
             response.status()
         ));
     }
-    response
-        .bytes()
-        .await
-        .map(|chunk| chunk.to_vec())
-        .map_err(|err| err.to_string())
+    let total_bytes = response.content_length();
+    emit_update_download_progress(
+        app,
+        UpdateDownloadProgress {
+            status: "starting".to_string(),
+            version: Some(version.to_string()),
+            asset_name: Some(asset_name.to_string()),
+            downloaded_bytes: 0,
+            total_bytes,
+            progress_percent: Some(0.0),
+        },
+    );
+
+    let mut response = response;
+    let mut bytes = Vec::new();
+    let mut downloaded_bytes = 0_u64;
+
+    while let Some(chunk) = response.chunk().await.map_err(|err| err.to_string())? {
+        downloaded_bytes += chunk.len() as u64;
+        bytes.extend_from_slice(&chunk);
+        emit_update_download_progress(
+            app,
+            UpdateDownloadProgress {
+                status: "downloading".to_string(),
+                version: Some(version.to_string()),
+                asset_name: Some(asset_name.to_string()),
+                downloaded_bytes,
+                total_bytes,
+                progress_percent: total_bytes
+                    .filter(|value| *value > 0)
+                    .map(|value| (downloaded_bytes as f64 / value as f64) * 100.0),
+            },
+        );
+    }
+
+    emit_update_download_progress(
+        app,
+        UpdateDownloadProgress {
+            status: "verifying".to_string(),
+            version: Some(version.to_string()),
+            asset_name: Some(asset_name.to_string()),
+            downloaded_bytes,
+            total_bytes,
+            progress_percent: Some(100.0),
+        },
+    );
+
+    Ok(bytes)
 }
 
 #[cfg(target_os = "windows")]
@@ -1934,85 +2079,106 @@ fn launch_installer(installer_path: &Path, asset_name: &str) -> anyhow::Result<(
 }
 
 #[tauri::command]
-pub async fn app_install_update(_state: State<'_, AppState>) -> Result<CommandMessage, String> {
+pub async fn app_download_update(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<UpdateDownloadResult, String> {
     let current_version = env!("CARGO_PKG_VERSION").to_string();
-    let (os, arch, _) = runtime_target();
-    let prefer_portable = updater_prefers_portable();
-    if os == "unknown" || arch == "unknown" {
-        return Err("Updater is not available on this runtime target.".to_string());
-    }
-
-    let repo = resolve_updater_repo();
-    let releases = fetch_releases(&repo).await?;
-    let Some((_release, asset, _latest_version, sha256)) =
-        select_release_for_target(&releases, &current_version, os, arch, prefer_portable)
-    else {
-        return Err("No newer update is available for this runtime target.".to_string());
-    };
-
-    let parsed_url = reqwest::Url::parse(asset.browser_download_url.trim())
-        .map_err(|_| "Resolved release asset URL is invalid.".to_string())?;
-    if parsed_url.scheme() != "https" {
-        return Err("Resolved release asset URL must use HTTPS.".to_string());
-    }
-    let host = parsed_url
-        .host_str()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if host != "github.com" {
-        return Err("Resolved release asset URL is not hosted on GitHub.".to_string());
-    }
-    let normalized_repo = repo.to_ascii_lowercase();
-    if !parsed_url
-        .path()
-        .to_ascii_lowercase()
-        .contains(&format!("/{normalized_repo}/releases/download/"))
-    {
-        return Err(
-            "Resolved release asset URL does not match configured updater repository.".to_string(),
-        );
-    }
-
-    let safe_name = asset
-        .name
-        .trim()
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-' {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-    if safe_name.is_empty() {
-        return Err("Resolved release asset name is invalid.".to_string());
-    }
-    let expected_hash = sha256.trim().to_ascii_lowercase();
-    if expected_hash.len() != 64 || !expected_hash.chars().all(|ch| ch.is_ascii_hexdigit()) {
-        return Err("Resolved release asset SHA256 is invalid.".to_string());
-    }
-
-    let bytes = download_release_asset(asset.browser_download_url.trim()).await?;
+    let resolved = resolve_update_asset(&current_version).await?;
+    validate_resolved_asset(&resolved.repo, &resolved.asset, &resolved.sha256)?;
+    let safe_name = sanitize_asset_name(resolved.asset.name.as_str())?;
+    let bytes = download_release_asset(
+        &app,
+        resolved.asset.browser_download_url.trim(),
+        resolved.latest_version.as_str(),
+        resolved.asset.name.as_str(),
+    )
+    .await?;
 
     let mut hasher = Sha256::new();
     hasher.update(&bytes);
     let actual_hash = format!("{:x}", hasher.finalize());
-    if actual_hash != expected_hash {
+    if actual_hash != resolved.sha256.trim().to_ascii_lowercase() {
         return Err(format!(
             "Hash mismatch. expected={}, actual={}",
-            expected_hash, actual_hash
+            resolved.sha256, actual_hash
         ));
     }
 
     let installer_path = std::env::temp_dir().join(format!("sdm-clickhouse-update-{}", safe_name));
     fs::write(&installer_path, &bytes).map_err(|err| err.to_string())?;
-    launch_installer(&installer_path, asset.name.as_str()).map_err(|err| err.to_string())?;
+    {
+        let mut pending_update = state
+            .pending_update
+            .lock()
+            .map_err(|_| "Updater state is unavailable.".to_string())?;
+        if let Some(previous) = pending_update.as_ref() {
+            if previous.installer_path != installer_path && previous.installer_path.exists() {
+                let _ = fs::remove_file(&previous.installer_path);
+            }
+        }
+        *pending_update = Some(PendingUpdate {
+            version: resolved.latest_version.clone(),
+            asset_name: resolved.asset.name.clone(),
+            installer_path: installer_path.clone(),
+        });
+    }
+    emit_update_download_progress(
+        &app,
+        UpdateDownloadProgress {
+            status: "ready".to_string(),
+            version: Some(resolved.latest_version.clone()),
+            asset_name: Some(resolved.asset.name.clone()),
+            downloaded_bytes: bytes.len() as u64,
+            total_bytes: Some(bytes.len() as u64),
+            progress_percent: Some(100.0),
+        },
+    );
+
+    Ok(UpdateDownloadResult {
+        message: format!(
+            "Update downloaded and verified: {}",
+            installer_path.display()
+        ),
+        version: resolved.latest_version,
+        asset_name: resolved.asset.name,
+    })
+}
+
+#[tauri::command]
+pub async fn app_install_update(state: State<'_, AppState>) -> Result<CommandMessage, String> {
+    let pending_update = {
+        let pending_update = state
+            .pending_update
+            .lock()
+            .map_err(|_| "Updater state is unavailable.".to_string())?;
+        pending_update.clone()
+    }
+    .ok_or_else(|| "Download the new update before installing it.".to_string())?;
+
+    if !pending_update.installer_path.exists() {
+        if let Ok(mut state_guard) = state.pending_update.lock() {
+            *state_guard = None;
+        }
+        return Err(
+            "Downloaded installer is no longer available. Download the update again.".to_string(),
+        );
+    }
+
+    launch_installer(
+        &pending_update.installer_path,
+        pending_update.asset_name.as_str(),
+    )
+    .map_err(|err| err.to_string())?;
+
+    if let Ok(mut state_guard) = state.pending_update.lock() {
+        *state_guard = None;
+    }
 
     Ok(CommandMessage {
         message: format!(
-            "Update installer launched (SHA256 verified): {}",
-            installer_path.display()
+            "Update installer launched: {}",
+            pending_update.installer_path.display()
         ),
     })
 }

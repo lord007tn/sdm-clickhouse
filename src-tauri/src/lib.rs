@@ -5,6 +5,7 @@ mod models;
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
 use directories::ProjectDirs;
@@ -35,10 +36,18 @@ fn set_unix_private_file(_path: &std::path::Path) -> anyhow::Result<()> {
 }
 
 #[derive(Clone)]
+pub struct PendingUpdate {
+    pub version: String,
+    pub asset_name: String,
+    pub installer_path: PathBuf,
+}
+
+#[derive(Clone)]
 pub struct AppState {
     pub db_path: PathBuf,
     pub secrets_path: PathBuf,
     pub startup_notice: Option<String>,
+    pub pending_update: Arc<Mutex<Option<PendingUpdate>>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -78,6 +87,7 @@ pub fn run() {
                 db_path,
                 secrets_path,
                 startup_notice,
+                pending_update: Arc::new(Mutex::new(None)),
             });
             Ok(())
         })
@@ -108,6 +118,7 @@ pub fn run() {
             commands::trigger_update_check,
             commands::app_request_restart,
             commands::app_check_update,
+            commands::app_download_update,
             commands::app_install_update,
             commands::insert_row,
             commands::update_rows_preview,
