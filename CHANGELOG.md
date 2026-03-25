@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.2] - 2026-03-25
+
+### Changed
+
+- Refactored observability into an independently scrolling insights dock so the SQL editor, results, and history remain visible while browsing cluster metrics.
+- Tightened the workbench layout to keep the query workspace primary on smaller screens instead of letting overview cards push execution controls out of reach.
+
+### Fixed
+
+- Restored query visibility and execution flow when the observability panel is populated with deeper ClickHouse overview content.
+- Added a browser-preview regression test covering observability scrolling without hiding the query workspace.
+
 ## [0.1.0] - 2026-03-24
 
 ### Added
@@ -34,3 +46,4 @@ All notable changes to this project are documented in this file.
 
 [0.0.0]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.0.0
 [0.1.0]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.0
+[0.1.2]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.2

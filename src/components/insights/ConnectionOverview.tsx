@@ -181,7 +181,7 @@ export function ConnectionOverview({
       : 0;
 
   return (
-    <section className="relative overflow-hidden border-b border-border/50">
+    <section className="relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(98,198,255,0.16),transparent_34%),radial-gradient(circle_at_80%_20%,rgba(245,184,92,0.14),transparent_28%),linear-gradient(180deg,rgba(6,10,18,0.98),rgba(8,14,24,0.94))]" />
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/35 to-transparent" />
 

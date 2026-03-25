@@ -2,7 +2,7 @@
 
 `SDM ClickHouse` is a Tauri desktop client for ClickHouse with a connection-first workflow inspired by Tiny RDM.
 
-## What ships in `v0.1.0`
+## What ships in `v0.1.2`
 
 - Saved ClickHouse connections with local profile storage and password handling outside SQLite.
 - Database and table explorer with column inspection and DDL viewing.

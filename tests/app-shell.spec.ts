@@ -279,6 +279,44 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
   ).toBe(false);
 });
 
+test("observability dock scrolls without hiding the query workspace", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await installMockTauriPreview(page);
+  await page.goto("/");
+
+  const sqlEditor = page.getByTestId("sql-editor");
+  const observabilityPanel = page.getByTestId("observability-panel");
+
+  await expect(sqlEditor).toBeVisible();
+  await expect(observabilityPanel).toBeVisible();
+
+  const panelMetrics = await observabilityPanel.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+  }));
+  expect(panelMetrics.scrollHeight).toBeGreaterThan(panelMetrics.clientHeight);
+
+  await observabilityPanel.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+
+  await expect(sqlEditor).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Run" }).click();
+  await expect
+    .poll(async () => {
+      return await page.evaluate(
+        () =>
+          (window as Window & { __QUERY_EXECUTE_CALLS__?: number })
+            .__QUERY_EXECUTE_CALLS__ ?? 0,
+      );
+    })
+    .toBe(1);
+});
+
 test("filters and sorts result rows in browser preview", async ({ page }) => {
   await installMockTauriPreview(page);
   await page.goto("/");

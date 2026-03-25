@@ -2091,605 +2091,665 @@ function App() {
               </Button>
             </div>
 
-            <ConnectionOverview
-              overview={overview}
-              loading={overviewLoading}
-              error={overviewError}
-              disabled={!isTauriRuntime}
-              onRefresh={refreshActiveConnectionData}
-            />
-
-            {/* Tab bar */}
-            <div className="flex items-center border-b border-border/50 bg-muted/20">
-              <div className="flex items-center overflow-x-auto" role="tablist">
-                {tabs.map((tab, tabIndex) => (
+            <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
+              <div
+                className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                data-testid="workbench-query-pane"
+              >
+                {/* Tab bar */}
+                <div className="flex items-center border-b border-border/50 bg-muted/20">
                   <div
-                    key={tab.id}
-                    role="tab"
-                    aria-selected={tab.id === activeTab?.id}
-                    tabIndex={0}
-                    className={cn(
-                      "group relative flex cursor-pointer select-none items-center gap-1 border-r border-border/30 px-3 py-1.5 text-xs",
-                      tab.id === activeTab?.id
-                        ? "bg-background text-foreground"
-                        : "text-muted-foreground hover:bg-background/50 hover:text-foreground/80",
-                    )}
-                    onClick={() => setActiveTabId(tab.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setActiveTabId(tab.id);
-                      }
-                    }}
+                    className="flex items-center overflow-x-auto"
+                    role="tablist"
                   >
-                    {tab.id === activeTab?.id && (
-                      <div className="absolute inset-x-0 top-0 h-0.5 bg-primary" />
-                    )}
-                    <span className="max-w-[120px] truncate">{tab.title}</span>
-                    {tabs.length > 1 && (
-                      <div className="ml-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                        <button
-                          className="rounded-sm p-0.5 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
-                          disabled={tabIndex === 0}
-                          title="Move tab left"
-                          aria-label={`Move ${tab.title} tab left`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            moveTab(tab.id, -1);
-                          }}
-                        >
-                          <ChevronRight className="h-3 w-3 rotate-180" />
-                        </button>
-                        <button
-                          className="rounded-sm p-0.5 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
-                          disabled={tabIndex === tabs.length - 1}
-                          title="Move tab right"
-                          aria-label={`Move ${tab.title} tab right`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            moveTab(tab.id, 1);
-                          }}
-                        >
-                          <ChevronRight className="h-3 w-3" />
-                        </button>
-                      </div>
-                    )}
-                    {tabs.length > 1 && (
-                      <button
-                        className="ml-0.5 rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
-                        aria-label={`Close ${tab.title} tab`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setTabs((prev) => {
-                            const filtered = prev.filter(
-                              (t) => t.id !== tab.id,
-                            );
-                            if (tab.id === activeTabId && filtered.length > 0) {
-                              setActiveTabId(filtered[0].id);
-                            }
-                            return filtered;
-                          });
+                    {tabs.map((tab, tabIndex) => (
+                      <div
+                        key={tab.id}
+                        role="tab"
+                        aria-selected={tab.id === activeTab?.id}
+                        tabIndex={0}
+                        className={cn(
+                          "group relative flex cursor-pointer select-none items-center gap-1 border-r border-border/30 px-3 py-1.5 text-xs",
+                          tab.id === activeTab?.id
+                            ? "bg-background text-foreground"
+                            : "text-muted-foreground hover:bg-background/50 hover:text-foreground/80",
+                        )}
+                        onClick={() => setActiveTabId(tab.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setActiveTabId(tab.id);
+                          }
                         }}
                       >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <button
-                className="flex items-center px-2.5 py-1.5 text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  const tab = createTab(tabs.length + 1);
-                  setTabs((prev) => [...prev, tab]);
-                  setActiveTabId(tab.id);
-                }}
-                title="New tab"
-                aria-label="Create new query tab"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {/* Content: editor + results + history */}
-            <div className="flex flex-1 flex-col overflow-hidden">
-              {/* SQL editor */}
-              <div className="flex-shrink-0 border-b border-border/50 p-3">
-                <QueryEditor
-                  value={activeTab?.sql ?? ""}
-                  onChange={(value) => {
-                    if (!activeTab) return;
-                    updateTab(activeTab.id, { sql: value });
-                  }}
-                  onRunQuery={() => void runQuery()}
-                  databases={databases}
-                  tables={queryCompletionTables}
-                  selectedTable={selectedTable}
-                  selectedTableColumns={queryCompletionColumns}
-                />
-                <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground">
-                  <span>Page {activeTab?.page ?? 1}</span>
-                  <span>Timeout</span>
-                  <Input
-                    className="h-5 w-24 border-border/50 text-[10px]"
-                    type="number"
-                    value={activeTab?.timeoutMs ?? 30000}
-                    onChange={(e) => {
-                      const value = Number(e.currentTarget.value) || 30000;
-                      if (!activeTab) return;
-                      updateTab(activeTab.id, { timeoutMs: value });
-                    }}
-                  />
-                  <button
-                    className="rounded px-1.5 py-0.5 hover:bg-muted/60 hover:text-foreground"
-                    onClick={() =>
-                      void runQuery(Math.max(1, (activeTab?.page ?? 1) - 1))
-                    }
-                  >
-                    &larr; Prev
-                  </button>
-                  <button
-                    className="rounded px-1.5 py-0.5 hover:bg-muted/60 hover:text-foreground"
-                    onClick={() => void runQuery((activeTab?.page ?? 1) + 1)}
-                  >
-                    Next &rarr;
-                  </button>
-                  {activeTab?.result && (
-                    <span className="ml-auto">
-                      {activeTab.result.rowCount} rows &middot;{" "}
-                      {activeTab.result.durationMs}ms
-                    </span>
-                  )}
-                  {activeTab?.error && (
-                    <span
-                      className="ml-auto max-w-[400px] truncate text-destructive"
-                      title={activeTab.error}
-                    >
-                      {activeTab.error}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Pending changes bar */}
-              {(hasPendingChanges || selectedRowIdx !== null) && (
-                <div className="flex items-center gap-2 border-b border-border/40 bg-card/80 px-3 py-1.5">
-                  {/* Left: selection info */}
-                  {selectedRowIdx !== null &&
-                    activeTab?.result?.rows?.[selectedRowIdx] && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-muted-foreground">
-                          Row {selectedRowIdx + 1}
+                        {tab.id === activeTab?.id && (
+                          <div className="absolute inset-x-0 top-0 h-0.5 bg-primary" />
+                        )}
+                        <span className="max-w-[120px] truncate">
+                          {tab.title}
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 gap-1 px-2 text-[11px]"
-                          onClick={() => {
-                            const row = activeTab.result!.rows[selectedRowIdx];
-                            navigator.clipboard.writeText(
-                              JSON.stringify(row, null, 2),
-                            );
-                            toast.success("Row copied as JSON");
-                          }}
-                        >
-                          <Copy className="h-3 w-3" />
-                          Copy
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={cn(
-                            "h-6 gap-1 px-2 text-[11px]",
-                            pendingDeletes.has(selectedRowIdx)
-                              ? "text-muted-foreground"
-                              : "text-destructive hover:bg-destructive/10 hover:text-destructive",
-                          )}
-                          onClick={() => togglePendingDelete(selectedRowIdx)}
-                        >
-                          {pendingDeletes.has(selectedRowIdx) ? (
-                            <>
-                              <Undo2 className="h-3 w-3" />
-                              Unmark
-                            </>
-                          ) : (
-                            <>
-                              <Trash2 className="h-3 w-3" />
-                              Delete
-                            </>
-                          )}
-                        </Button>
-                        <div className="h-4 w-px bg-border/40" />
-                      </div>
-                    )}
-
-                  {/* Center: pending changes summary */}
-                  {hasPendingChanges && (
-                    <div className="flex items-center gap-1.5">
-                      {pendingEdits.size > 0 && (
-                        <Badge
-                          variant="secondary"
-                          className="h-5 gap-1 bg-amber-500/10 px-1.5 text-[10px] text-amber-400"
-                        >
-                          <Pencil className="h-2.5 w-2.5" />
-                          {pendingEdits.size} edit
-                          {pendingEdits.size > 1 ? "s" : ""}
-                        </Badge>
-                      )}
-                      {pendingDeletes.size > 0 && (
-                        <Badge
-                          variant="secondary"
-                          className="h-5 gap-1 bg-destructive/10 px-1.5 text-[10px] text-destructive"
-                        >
-                          <Trash2 className="h-2.5 w-2.5" />
-                          {pendingDeletes.size} deletion
-                          {pendingDeletes.size > 1 ? "s" : ""}
-                        </Badge>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Right: apply / discard / dismiss */}
-                  <div className="ml-auto flex items-center gap-1">
-                    {hasPendingChanges && (
-                      <>
-                        <Button
-                          size="sm"
-                          className="h-6 gap-1 bg-emerald-600 px-2.5 text-[11px] text-white hover:bg-emerald-500"
-                          onClick={() => void applyChanges()}
-                          disabled={applyingChanges}
-                        >
-                          {applyingChanges ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Check className="h-3 w-3" />
-                          )}
-                          Apply
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 gap-1 px-2 text-[11px] text-muted-foreground"
-                          onClick={discardChanges}
-                          disabled={applyingChanges}
-                        >
-                          <Undo2 className="h-3 w-3" />
-                          Discard
-                        </Button>
-                      </>
-                    )}
-                    {!hasPendingChanges && selectedRowIdx !== null && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-1.5 text-muted-foreground"
-                        onClick={() => setSelectedRowIdx(null)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Results table */}
-              {activeTab?.result?.columns?.length ? (
-                <div className="border-b border-border/50 bg-background/80 px-3 py-2 backdrop-blur">
-                  <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
-                    <div className="relative min-w-0 flex-1">
-                      <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        value={resultFilter}
-                        onChange={(event) =>
-                          setResultFilter(event.currentTarget.value)
-                        }
-                        placeholder="Filter rows across the visible result set"
-                        className="h-8 border-border/70 bg-muted/30 pr-9 pl-8 text-xs"
-                        data-testid="results-filter-input"
-                        aria-label="Filter result rows"
-                      />
-                      {activeResultFilter ? (
-                        <button
-                          type="button"
-                          className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-                          onClick={() => setResultFilter("")}
-                          aria-label="Clear result filter"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                      <Badge
-                        variant="secondary"
-                        className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-1 font-medium text-foreground"
-                        data-testid="results-count-badge"
-                      >
-                        {visibleResultCount} / {totalResultCount} rows
-                      </Badge>
-                      <div className="flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-muted-foreground">
-                        <Sparkles className="h-3 w-3" />
-                        <span data-testid="results-sort-summary">
-                          {primaryResultSort
-                            ? `${primaryResultSort.id} ${primaryResultSort.desc ? "desc" : "asc"}`
-                            : "Natural order"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              <div ref={resultContainerRef} className="flex-1 overflow-auto">
-                {activeTab?.running ? (
-                  <div className="p-3">
-                    <div className="space-y-1">
-                      {Array.from({ length: 8 }).map((_, i) => (
-                        <Skeleton
-                          key={i}
-                          className="h-7 w-full"
-                          style={{ opacity: 1 - i * 0.1 }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ) : activeTab?.result?.columns?.length ? (
-                  <Table>
-                    <TableHeader>
-                      {resultTable.getHeaderGroups().map((headerGroup) => (
-                        <TableRow key={headerGroup.id}>
-                          {headerGroup.headers.map((header) => (
-                            <TableHead
-                              key={header.id}
-                              className="sticky top-0 z-10 whitespace-nowrap bg-muted/40 text-xs font-medium backdrop-blur-sm"
+                        {tabs.length > 1 && (
+                          <div className="ml-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                            <button
+                              className="rounded-sm p-0.5 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
+                              disabled={tabIndex === 0}
+                              title="Move tab left"
+                              aria-label={`Move ${tab.title} tab left`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                moveTab(tab.id, -1);
+                              }}
                             >
-                              {header.isPlaceholder
-                                ? null
-                                : flexRender(
-                                    header.column.columnDef.header,
-                                    header.getContext(),
-                                  )}
-                            </TableHead>
-                          ))}
-                        </TableRow>
-                      ))}
-                    </TableHeader>
-                    <TableBody>
-                      {resultTableRows.length === 0 ? (
-                        <TableRow>
-                          <TableCell
-                            colSpan={
-                              resultTable.getAllLeafColumns().length || 1
-                            }
-                            className="h-28 text-center text-xs text-muted-foreground"
+                              <ChevronRight className="h-3 w-3 rotate-180" />
+                            </button>
+                            <button
+                              className="rounded-sm p-0.5 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
+                              disabled={tabIndex === tabs.length - 1}
+                              title="Move tab right"
+                              aria-label={`Move ${tab.title} tab right`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                moveTab(tab.id, 1);
+                              }}
+                            >
+                              <ChevronRight className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                        {tabs.length > 1 && (
+                          <button
+                            className="ml-0.5 rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
+                            aria-label={`Close ${tab.title} tab`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTabs((prev) => {
+                                const filtered = prev.filter(
+                                  (t) => t.id !== tab.id,
+                                );
+                                if (
+                                  tab.id === activeTabId &&
+                                  filtered.length > 0
+                                ) {
+                                  setActiveTabId(filtered[0].id);
+                                }
+                                return filtered;
+                              });
+                            }}
                           >
-                            {activeResultFilter
-                              ? `No rows match "${activeResultFilter}".`
-                              : "No rows returned for this query."}
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        <>
-                          {useVirtualizedResultRows ? (
-                            <>
-                              {virtualPaddingTop > 0 ? (
-                                <TableRow>
-                                  <TableCell
-                                    colSpan={
-                                      resultTable.getAllLeafColumns().length
-                                    }
-                                    style={{ height: virtualPaddingTop }}
-                                  />
-                                </TableRow>
-                              ) : null}
-                              {virtualRows.map((virtualRow) => {
-                                const row = resultTableRows[virtualRow.index];
-                                if (!row) return null;
-                                return renderResultRow(row, virtualRow.size);
-                              })}
-                              {virtualPaddingBottom > 0 ? (
-                                <TableRow>
-                                  <TableCell
-                                    colSpan={
-                                      resultTable.getAllLeafColumns().length
-                                    }
-                                    style={{ height: virtualPaddingBottom }}
-                                  />
-                                </TableRow>
-                              ) : null}
-                            </>
-                          ) : (
-                            resultTableRows.map((row) => renderResultRow(row))
-                          )}
-                        </>
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    className="flex items-center px-2.5 py-1.5 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      const tab = createTab(tabs.length + 1);
+                      setTabs((prev) => [...prev, tab]);
+                      setActiveTabId(tab.id);
+                    }}
+                    title="New tab"
+                    aria-label="Create new query tab"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                {/* Content: editor + results + history */}
+                <div className="flex flex-1 flex-col overflow-hidden">
+                  {/* SQL editor */}
+                  <div className="flex-shrink-0 border-b border-border/50 p-3">
+                    <QueryEditor
+                      value={activeTab?.sql ?? ""}
+                      onChange={(value) => {
+                        if (!activeTab) return;
+                        updateTab(activeTab.id, { sql: value });
+                      }}
+                      onRunQuery={() => void runQuery()}
+                      databases={databases}
+                      tables={queryCompletionTables}
+                      selectedTable={selectedTable}
+                      selectedTableColumns={queryCompletionColumns}
+                    />
+                    <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+                      <span>Page {activeTab?.page ?? 1}</span>
+                      <span>Timeout</span>
+                      <Input
+                        className="h-5 w-24 border-border/50 text-[10px]"
+                        type="number"
+                        value={activeTab?.timeoutMs ?? 30000}
+                        onChange={(e) => {
+                          const value = Number(e.currentTarget.value) || 30000;
+                          if (!activeTab) return;
+                          updateTab(activeTab.id, { timeoutMs: value });
+                        }}
+                      />
+                      <button
+                        className="rounded px-1.5 py-0.5 hover:bg-muted/60 hover:text-foreground"
+                        onClick={() =>
+                          void runQuery(Math.max(1, (activeTab?.page ?? 1) - 1))
+                        }
+                      >
+                        &larr; Prev
+                      </button>
+                      <button
+                        className="rounded px-1.5 py-0.5 hover:bg-muted/60 hover:text-foreground"
+                        onClick={() =>
+                          void runQuery((activeTab?.page ?? 1) + 1)
+                        }
+                      >
+                        Next &rarr;
+                      </button>
+                      {activeTab?.result && (
+                        <span className="ml-auto">
+                          {activeTab.result.rowCount} rows &middot;{" "}
+                          {activeTab.result.durationMs}ms
+                        </span>
                       )}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="flex h-full items-center justify-center">
-                    <div className="text-center">
-                      <Table2 className="mx-auto h-10 w-10 text-muted-foreground/15" />
-                      <p className="mt-2 text-xs text-muted-foreground/40">
-                        {activeTab?.result?.message ??
-                          "Run a query to see results"}
+                      {activeTab?.error && (
+                        <span
+                          className="ml-auto max-w-[400px] truncate text-destructive"
+                          title={activeTab.error}
+                        >
+                          {activeTab.error}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Pending changes bar */}
+                  {(hasPendingChanges || selectedRowIdx !== null) && (
+                    <div className="flex items-center gap-2 border-b border-border/40 bg-card/80 px-3 py-1.5">
+                      {/* Left: selection info */}
+                      {selectedRowIdx !== null &&
+                        activeTab?.result?.rows?.[selectedRowIdx] && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-muted-foreground">
+                              Row {selectedRowIdx + 1}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 gap-1 px-2 text-[11px]"
+                              onClick={() => {
+                                const row =
+                                  activeTab.result!.rows[selectedRowIdx];
+                                navigator.clipboard.writeText(
+                                  JSON.stringify(row, null, 2),
+                                );
+                                toast.success("Row copied as JSON");
+                              }}
+                            >
+                              <Copy className="h-3 w-3" />
+                              Copy
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={cn(
+                                "h-6 gap-1 px-2 text-[11px]",
+                                pendingDeletes.has(selectedRowIdx)
+                                  ? "text-muted-foreground"
+                                  : "text-destructive hover:bg-destructive/10 hover:text-destructive",
+                              )}
+                              onClick={() =>
+                                togglePendingDelete(selectedRowIdx)
+                              }
+                            >
+                              {pendingDeletes.has(selectedRowIdx) ? (
+                                <>
+                                  <Undo2 className="h-3 w-3" />
+                                  Unmark
+                                </>
+                              ) : (
+                                <>
+                                  <Trash2 className="h-3 w-3" />
+                                  Delete
+                                </>
+                              )}
+                            </Button>
+                            <div className="h-4 w-px bg-border/40" />
+                          </div>
+                        )}
+
+                      {/* Center: pending changes summary */}
+                      {hasPendingChanges && (
+                        <div className="flex items-center gap-1.5">
+                          {pendingEdits.size > 0 && (
+                            <Badge
+                              variant="secondary"
+                              className="h-5 gap-1 bg-amber-500/10 px-1.5 text-[10px] text-amber-400"
+                            >
+                              <Pencil className="h-2.5 w-2.5" />
+                              {pendingEdits.size} edit
+                              {pendingEdits.size > 1 ? "s" : ""}
+                            </Badge>
+                          )}
+                          {pendingDeletes.size > 0 && (
+                            <Badge
+                              variant="secondary"
+                              className="h-5 gap-1 bg-destructive/10 px-1.5 text-[10px] text-destructive"
+                            >
+                              <Trash2 className="h-2.5 w-2.5" />
+                              {pendingDeletes.size} deletion
+                              {pendingDeletes.size > 1 ? "s" : ""}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Right: apply / discard / dismiss */}
+                      <div className="ml-auto flex items-center gap-1">
+                        {hasPendingChanges && (
+                          <>
+                            <Button
+                              size="sm"
+                              className="h-6 gap-1 bg-emerald-600 px-2.5 text-[11px] text-white hover:bg-emerald-500"
+                              onClick={() => void applyChanges()}
+                              disabled={applyingChanges}
+                            >
+                              {applyingChanges ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Check className="h-3 w-3" />
+                              )}
+                              Apply
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 gap-1 px-2 text-[11px] text-muted-foreground"
+                              onClick={discardChanges}
+                              disabled={applyingChanges}
+                            >
+                              <Undo2 className="h-3 w-3" />
+                              Discard
+                            </Button>
+                          </>
+                        )}
+                        {!hasPendingChanges && selectedRowIdx !== null && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-1.5 text-muted-foreground"
+                            onClick={() => setSelectedRowIdx(null)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Results table */}
+                  {activeTab?.result?.columns?.length ? (
+                    <div className="border-b border-border/50 bg-background/80 px-3 py-2 backdrop-blur">
+                      <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+                        <div className="relative min-w-0 flex-1">
+                          <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            value={resultFilter}
+                            onChange={(event) =>
+                              setResultFilter(event.currentTarget.value)
+                            }
+                            placeholder="Filter rows across the visible result set"
+                            className="h-8 border-border/70 bg-muted/30 pr-9 pl-8 text-xs"
+                            data-testid="results-filter-input"
+                            aria-label="Filter result rows"
+                          />
+                          {activeResultFilter ? (
+                            <button
+                              type="button"
+                              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                              onClick={() => setResultFilter("")}
+                              aria-label="Clear result filter"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                          <Badge
+                            variant="secondary"
+                            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-1 font-medium text-foreground"
+                            data-testid="results-count-badge"
+                          >
+                            {visibleResultCount} / {totalResultCount} rows
+                          </Badge>
+                          <div className="flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-muted-foreground">
+                            <Sparkles className="h-3 w-3" />
+                            <span data-testid="results-sort-summary">
+                              {primaryResultSort
+                                ? `${primaryResultSort.id} ${primaryResultSort.desc ? "desc" : "asc"}`
+                                : "Natural order"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div
+                    ref={resultContainerRef}
+                    className="flex-1 overflow-auto"
+                  >
+                    {activeTab?.running ? (
+                      <div className="p-3">
+                        <div className="space-y-1">
+                          {Array.from({ length: 8 }).map((_, i) => (
+                            <Skeleton
+                              key={i}
+                              className="h-7 w-full"
+                              style={{ opacity: 1 - i * 0.1 }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : activeTab?.result?.columns?.length ? (
+                      <Table>
+                        <TableHeader>
+                          {resultTable.getHeaderGroups().map((headerGroup) => (
+                            <TableRow key={headerGroup.id}>
+                              {headerGroup.headers.map((header) => (
+                                <TableHead
+                                  key={header.id}
+                                  className="sticky top-0 z-10 whitespace-nowrap bg-muted/40 text-xs font-medium backdrop-blur-sm"
+                                >
+                                  {header.isPlaceholder
+                                    ? null
+                                    : flexRender(
+                                        header.column.columnDef.header,
+                                        header.getContext(),
+                                      )}
+                                </TableHead>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableHeader>
+                        <TableBody>
+                          {resultTableRows.length === 0 ? (
+                            <TableRow>
+                              <TableCell
+                                colSpan={
+                                  resultTable.getAllLeafColumns().length || 1
+                                }
+                                className="h-28 text-center text-xs text-muted-foreground"
+                              >
+                                {activeResultFilter
+                                  ? `No rows match "${activeResultFilter}".`
+                                  : "No rows returned for this query."}
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            <>
+                              {useVirtualizedResultRows ? (
+                                <>
+                                  {virtualPaddingTop > 0 ? (
+                                    <TableRow>
+                                      <TableCell
+                                        colSpan={
+                                          resultTable.getAllLeafColumns().length
+                                        }
+                                        style={{ height: virtualPaddingTop }}
+                                      />
+                                    </TableRow>
+                                  ) : null}
+                                  {virtualRows.map((virtualRow) => {
+                                    const row =
+                                      resultTableRows[virtualRow.index];
+                                    if (!row) return null;
+                                    return renderResultRow(
+                                      row,
+                                      virtualRow.size,
+                                    );
+                                  })}
+                                  {virtualPaddingBottom > 0 ? (
+                                    <TableRow>
+                                      <TableCell
+                                        colSpan={
+                                          resultTable.getAllLeafColumns().length
+                                        }
+                                        style={{ height: virtualPaddingBottom }}
+                                      />
+                                    </TableRow>
+                                  ) : null}
+                                </>
+                              ) : (
+                                resultTableRows.map((row) =>
+                                  renderResultRow(row),
+                                )
+                              )}
+                            </>
+                          )}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="flex h-full items-center justify-center">
+                        <div className="text-center">
+                          <Table2 className="mx-auto h-10 w-10 text-muted-foreground/15" />
+                          <p className="mt-2 text-xs text-muted-foreground/40">
+                            {activeTab?.result?.message ??
+                              "Run a query to see results"}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* History / Snippets */}
+                  <div className="h-[180px] flex-shrink-0 border-t border-border/50">
+                    <Tabs
+                      defaultValue="history"
+                      className="flex h-full flex-col"
+                    >
+                      <div className="flex items-center border-b border-border/30 px-3">
+                        <TabsList className="h-8 gap-1 bg-transparent p-0">
+                          <TabsTrigger
+                            value="history"
+                            className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
+                          >
+                            <Clock className="h-3 w-3" />
+                            History
+                          </TabsTrigger>
+                          <TabsTrigger
+                            value="snippets"
+                            className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
+                          >
+                            <Code2 className="h-3 w-3" />
+                            Snippets
+                          </TabsTrigger>
+                          <TabsTrigger
+                            value="audit"
+                            className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
+                          >
+                            <Check className="h-3 w-3" />
+                            Audit
+                          </TabsTrigger>
+                          <TabsTrigger
+                            value="logs"
+                            className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
+                          >
+                            <Clock className="h-3 w-3" />
+                            Logs
+                          </TabsTrigger>
+                        </TabsList>
+                      </div>
+                      <TabsContent
+                        value="history"
+                        className="mt-0 flex-1 overflow-hidden p-0"
+                      >
+                        <ScrollArea className="h-full">
+                          <div className="p-1.5">
+                            {historySql.length > 0 ? (
+                              historySql.map((sql, idx) => (
+                                <button
+                                  key={`${idx}-${sql}`}
+                                  className="mono mb-0.5 block w-full truncate rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                  onClick={() =>
+                                    activeTab &&
+                                    updateTab(activeTab.id, { sql })
+                                  }
+                                  title={sql}
+                                >
+                                  {sql}
+                                </button>
+                              ))
+                            ) : (
+                              <p className="py-4 text-center text-[11px] text-muted-foreground/40">
+                                No query history
+                              </p>
+                            )}
+                          </div>
+                        </ScrollArea>
+                      </TabsContent>
+                      <TabsContent
+                        value="snippets"
+                        className="mt-0 flex-1 overflow-hidden p-0"
+                      >
+                        <ScrollArea className="h-full">
+                          <div className="p-1.5">
+                            {snippets.length > 0 ? (
+                              snippets.map((snippet) => (
+                                <div
+                                  key={snippet.id}
+                                  className="group mb-0.5 flex items-center gap-2 rounded-md px-2 py-1 hover:bg-muted/50"
+                                >
+                                  <button
+                                    className="mono min-w-0 flex-1 truncate text-left text-[11px] text-muted-foreground hover:text-foreground"
+                                    onClick={() =>
+                                      activeTab &&
+                                      updateTab(activeTab.id, {
+                                        sql: snippet.sql,
+                                      })
+                                    }
+                                    title={snippet.sql}
+                                  >
+                                    {snippet.name}
+                                  </button>
+                                  <button
+                                    className="rounded-md p-0.5 opacity-0 transition-opacity hover:bg-destructive/20 group-hover:opacity-100"
+                                    aria-label={`Delete snippet ${snippet.name}`}
+                                    onClick={async () => {
+                                      try {
+                                        await api.snippetDelete(snippet.id);
+                                        void loadWorkspace().catch((error) =>
+                                          toast.error(String(error)),
+                                        );
+                                      } catch (error) {
+                                        toast.error(String(error));
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="h-3 w-3 text-muted-foreground" />
+                                  </button>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="py-4 text-center text-[11px] text-muted-foreground/40">
+                                No saved snippets
+                              </p>
+                            )}
+                          </div>
+                        </ScrollArea>
+                      </TabsContent>
+                      <TabsContent
+                        value="audit"
+                        className="mt-0 flex-1 overflow-hidden p-0"
+                      >
+                        <ScrollArea className="h-full">
+                          <div className="p-1.5">
+                            {auditItems.length > 0 ? (
+                              auditItems.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="mb-0.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/40"
+                                  title={item.payloadJson ?? ""}
+                                >
+                                  <div className="truncate font-medium text-foreground/80">
+                                    {item.action} · {item.target}
+                                  </div>
+                                  <div className="truncate text-[10px]">
+                                    {item.createdAt}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="py-4 text-center text-[11px] text-muted-foreground/40">
+                                No audit records
+                              </p>
+                            )}
+                          </div>
+                        </ScrollArea>
+                      </TabsContent>
+                      <TabsContent
+                        value="logs"
+                        className="mt-0 flex-1 overflow-hidden p-0"
+                      >
+                        <ScrollArea className="h-full">
+                          <div className="p-1.5">
+                            {appLogs.length > 0 ? (
+                              appLogs.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="mb-0.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/40"
+                                  title={item.contextJson ?? ""}
+                                >
+                                  <div className="truncate font-medium text-foreground/80">
+                                    [{item.level}] {item.category}
+                                  </div>
+                                  <div className="truncate text-[10px]">
+                                    {item.message}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="py-4 text-center text-[11px] text-muted-foreground/40">
+                                No app logs
+                              </p>
+                            )}
+                          </div>
+                        </ScrollArea>
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+                </div>
+              </div>
+
+              <aside className="flex max-h-[42vh] min-h-[300px] flex-col overflow-hidden border-t border-border/50 bg-[linear-gradient(180deg,rgba(14,20,30,0.92),rgba(8,12,20,0.96))] xl:max-h-none xl:w-[440px] xl:min-h-0 xl:border-t-0 xl:border-l">
+                <div className="border-b border-white/8 bg-black/18 px-4 py-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-100/58">
+                    Insights Dock
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold tracking-tight text-white">
+                        Observability
+                      </div>
+                      <p className="mt-1 text-[11px] leading-5 text-white/48">
+                        Scroll cluster signals without pushing the query editor
+                        or results out of view.
                       </p>
                     </div>
+                    <Badge className="border-white/10 bg-white/6 px-2 py-0.5 text-[10px] text-white/72">
+                      Live
+                    </Badge>
                   </div>
-                )}
-              </div>
+                </div>
 
-              {/* History / Snippets */}
-              <div className="h-[180px] flex-shrink-0 border-t border-border/50">
-                <Tabs defaultValue="history" className="flex h-full flex-col">
-                  <div className="flex items-center border-b border-border/30 px-3">
-                    <TabsList className="h-8 gap-1 bg-transparent p-0">
-                      <TabsTrigger
-                        value="history"
-                        className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
-                      >
-                        <Clock className="h-3 w-3" />
-                        History
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="snippets"
-                        className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
-                      >
-                        <Code2 className="h-3 w-3" />
-                        Snippets
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="audit"
-                        className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
-                      >
-                        <Check className="h-3 w-3" />
-                        Audit
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="logs"
-                        className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
-                      >
-                        <Clock className="h-3 w-3" />
-                        Logs
-                      </TabsTrigger>
-                    </TabsList>
-                  </div>
-                  <TabsContent
-                    value="history"
-                    className="mt-0 flex-1 overflow-hidden p-0"
-                  >
-                    <ScrollArea className="h-full">
-                      <div className="p-1.5">
-                        {historySql.length > 0 ? (
-                          historySql.map((sql, idx) => (
-                            <button
-                              key={`${idx}-${sql}`}
-                              className="mono mb-0.5 block w-full truncate rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                              onClick={() =>
-                                activeTab && updateTab(activeTab.id, { sql })
-                              }
-                              title={sql}
-                            >
-                              {sql}
-                            </button>
-                          ))
-                        ) : (
-                          <p className="py-4 text-center text-[11px] text-muted-foreground/40">
-                            No query history
-                          </p>
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </TabsContent>
-                  <TabsContent
-                    value="snippets"
-                    className="mt-0 flex-1 overflow-hidden p-0"
-                  >
-                    <ScrollArea className="h-full">
-                      <div className="p-1.5">
-                        {snippets.length > 0 ? (
-                          snippets.map((snippet) => (
-                            <div
-                              key={snippet.id}
-                              className="group mb-0.5 flex items-center gap-2 rounded-md px-2 py-1 hover:bg-muted/50"
-                            >
-                              <button
-                                className="mono min-w-0 flex-1 truncate text-left text-[11px] text-muted-foreground hover:text-foreground"
-                                onClick={() =>
-                                  activeTab &&
-                                  updateTab(activeTab.id, {
-                                    sql: snippet.sql,
-                                  })
-                                }
-                                title={snippet.sql}
-                              >
-                                {snippet.name}
-                              </button>
-                              <button
-                                className="rounded-md p-0.5 opacity-0 transition-opacity hover:bg-destructive/20 group-hover:opacity-100"
-                                aria-label={`Delete snippet ${snippet.name}`}
-                                onClick={async () => {
-                                  try {
-                                    await api.snippetDelete(snippet.id);
-                                    void loadWorkspace().catch((error) =>
-                                      toast.error(String(error)),
-                                    );
-                                  } catch (error) {
-                                    toast.error(String(error));
-                                  }
-                                }}
-                              >
-                                <Trash2 className="h-3 w-3 text-muted-foreground" />
-                              </button>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="py-4 text-center text-[11px] text-muted-foreground/40">
-                            No saved snippets
-                          </p>
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </TabsContent>
-                  <TabsContent
-                    value="audit"
-                    className="mt-0 flex-1 overflow-hidden p-0"
-                  >
-                    <ScrollArea className="h-full">
-                      <div className="p-1.5">
-                        {auditItems.length > 0 ? (
-                          auditItems.map((item) => (
-                            <div
-                              key={item.id}
-                              className="mb-0.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/40"
-                              title={item.payloadJson ?? ""}
-                            >
-                              <div className="truncate font-medium text-foreground/80">
-                                {item.action} · {item.target}
-                              </div>
-                              <div className="truncate text-[10px]">
-                                {item.createdAt}
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="py-4 text-center text-[11px] text-muted-foreground/40">
-                            No audit records
-                          </p>
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </TabsContent>
-                  <TabsContent
-                    value="logs"
-                    className="mt-0 flex-1 overflow-hidden p-0"
-                  >
-                    <ScrollArea className="h-full">
-                      <div className="p-1.5">
-                        {appLogs.length > 0 ? (
-                          appLogs.map((item) => (
-                            <div
-                              key={item.id}
-                              className="mb-0.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/40"
-                              title={item.contextJson ?? ""}
-                            >
-                              <div className="truncate font-medium text-foreground/80">
-                                [{item.level}] {item.category}
-                              </div>
-                              <div className="truncate text-[10px]">
-                                {item.message}
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="py-4 text-center text-[11px] text-muted-foreground/40">
-                            No app logs
-                          </p>
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </TabsContent>
-                </Tabs>
-              </div>
+                <div
+                  className="min-h-0 flex-1 overflow-auto"
+                  data-testid="observability-panel"
+                >
+                  <ConnectionOverview
+                    overview={overview}
+                    loading={overviewLoading}
+                    error={overviewError}
+                    disabled={!isTauriRuntime}
+                    onRefresh={refreshActiveConnectionData}
+                  />
+                </div>
+              </aside>
             </div>
           </>
         )}
