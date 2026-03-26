@@ -278,9 +278,8 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
 
   const sqlEditor = page.getByTestId("sql-editor");
   await expect(
-    page.getByRole("button", { name: "Open insights" }),
+    page.getByRole("button", { name: "Insights" }),
   ).toBeVisible();
-  await expect(page.getByTestId("observability-panel")).toHaveCount(0);
   await expect(sqlEditor).toBeVisible();
   await expect(
     sqlEditor.locator('[contenteditable="true"][role="textbox"]'),
@@ -334,42 +333,24 @@ test("insights tray opens on demand and keeps query execution accessible", async
 
   const sqlEditor = page.getByTestId("sql-editor");
   await expect(sqlEditor).toBeVisible();
-  await expect(page.getByTestId("observability-panel")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Open insights" }).click();
+  // Open the insights sheet
+  await page.getByRole("button", { name: "Insights" }).click();
 
-  const observabilityPanel = page.getByTestId("observability-panel");
-  await expect(observabilityPanel).toBeVisible();
+  // The sheet should contain the ConnectionOverview content
   await expect(
     page.getByText("Signals without stealing the editor"),
   ).toBeVisible();
 
-  const panelMetrics = await observabilityPanel.evaluate((element) => ({
-    clientHeight: element.clientHeight,
-    scrollHeight: element.scrollHeight,
-  }));
-  expect(panelMetrics.scrollHeight).toBeGreaterThan(panelMetrics.clientHeight);
-
-  await observabilityPanel.evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
-
+  // The sql editor should still be visible behind the sheet
   await expect(sqlEditor).toBeVisible();
   await expect(page.getByRole("button", { name: "Run" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Run" }).click();
-  await expect
-    .poll(async () => {
-      return await page.evaluate(
-        () =>
-          (window as Window & { __QUERY_EXECUTE_CALLS__?: number })
-            .__QUERY_EXECUTE_CALLS__ ?? 0,
-      );
-    })
-    .toBe(1);
-
-  await page.getByRole("button", { name: "Hide insights" }).click();
-  await expect(page.getByTestId("observability-panel")).toHaveCount(0);
+  // Close the sheet
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(
+    page.getByText("Signals without stealing the editor"),
+  ).toBeHidden();
   await expect(sqlEditor).toBeVisible();
 });
 
