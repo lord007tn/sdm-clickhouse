@@ -334,15 +334,15 @@ test("insights tray opens on demand and keeps query execution accessible", async
   const sqlEditor = page.getByTestId("sql-editor");
   await expect(sqlEditor).toBeVisible();
 
-  // Open the insights sheet
+  // Open the insights dialog
   await page.getByRole("button", { name: "Insights" }).click();
 
-  // The sheet should contain the ConnectionOverview content
+  // The dialog should contain the ConnectionOverview content
   await expect(
     page.getByText("Signals without stealing the editor"),
   ).toBeVisible();
 
-  // Close the sheet and verify the workspace is restored
+  // Close the dialog and verify the workspace is restored
   await page.getByRole("button", { name: "Close" }).click();
   await expect(
     page.getByText("Signals without stealing the editor"),

@@ -320,16 +320,30 @@ const CLICKHOUSE_TYPES = [
   "AggregateFunction",
 ] as const;
 
-const VALID_IDENTIFIER = /[\w.`]*/;
+/** Match a word (including backtick-quoted identifiers). */
+const WORD_PATTERN = /[\w`]*/;
+
+/** Match a qualified name like `db.table` or `db`.`table`. */
+const QUALIFIED_PATTERN = /[\w`.]+/;
+
+type SqlContext = "from" | "select" | "where" | "dot-database" | "general";
 
 /** Detect the SQL context near the cursor to offer better suggestions. */
 function detectContext(
   text: string,
-): "from" | "select" | "where" | "general" {
-  // Get text before cursor, find the last relevant keyword
-  const upper = text.toUpperCase();
+): { ctx: SqlContext; dotPrefix?: string } {
+  // Check if the cursor is right after a dot (e.g. `default.`)
+  // This means we should show table completions for that database
+  const dotMatch = text.match(
+    /(?:`([^`]+)`|(\w+))\.(?:`([^`]*)`?|(\w*))$/,
+  );
+  if (dotMatch) {
+    const dbName = dotMatch[1] ?? dotMatch[2] ?? "";
+    return { ctx: "dot-database", dotPrefix: dbName };
+  }
 
-  // Walk backwards to find the last unmatched keyword
+  // Walk backwards to find the last relevant keyword
+  const upper = text.toUpperCase();
   const fromIdx = upper.lastIndexOf("FROM");
   const selectIdx = upper.lastIndexOf("SELECT");
   const whereIdx = upper.lastIndexOf("WHERE");
@@ -346,8 +360,8 @@ function detectContext(
   ];
 
   const best = candidates.reduce((a, b) => (b.idx > a.idx ? b : a));
-  if (best.idx < 0) return "general";
-  return best.ctx;
+  if (best.idx < 0) return { ctx: "general" };
+  return { ctx: best.ctx };
 }
 
 function addUniqueCompletion(
@@ -400,6 +414,15 @@ export function createSqlCompletionSource(input: SqlCompletionInput) {
       boost: 2,
     }));
 
+  // Build a lookup: database → tables
+  const tablesByDatabase = new Map<string, SqlCompletionTable[]>();
+  for (const table of input.tables) {
+    if (!table.name) continue;
+    const existing = tablesByDatabase.get(table.database.toLowerCase()) ?? [];
+    existing.push(table);
+    tablesByDatabase.set(table.database.toLowerCase(), existing);
+  }
+
   const tableItems: Completion[] = [];
   const seenTables = new Set<string>();
   for (const table of input.tables) {
@@ -435,12 +458,32 @@ export function createSqlCompletionSource(input: SqlCompletionInput) {
     }));
 
   return (context: CompletionContext): CompletionResult | null => {
-    const word = context.matchBefore(VALID_IDENTIFIER);
-    if (!context.explicit && (!word || word.from === word.to)) return null;
-
-    // Detect context to prioritize relevant completions
     const textBefore = context.state.doc.sliceString(0, context.pos);
-    const ctx = detectContext(textBefore);
+    const { ctx, dotPrefix } = detectContext(textBefore);
+
+    // After a dot (e.g. `default.`) → show only tables for that database
+    if (ctx === "dot-database" && dotPrefix) {
+      const qualifiedWord = context.matchBefore(QUALIFIED_PATTERN);
+      const dbTables = tablesByDatabase.get(dotPrefix.toLowerCase()) ?? [];
+      if (dbTables.length === 0 && !context.explicit) return null;
+
+      const items: Completion[] = dbTables.map((table) => ({
+        label: `${dotPrefix}.${table.name}`,
+        type: "variable",
+        detail: "table",
+        boost: 10,
+      }));
+
+      return {
+        from: qualifiedWord ? qualifiedWord.from : context.pos,
+        options: items,
+        validFor: QUALIFIED_PATTERN,
+      };
+    }
+
+    // Standard completion: match a word before cursor
+    const word = context.matchBefore(WORD_PATTERN);
+    if (!context.explicit && (!word || word.from === word.to)) return null;
 
     const items: Completion[] = [];
     const seen = new Set<string>();
@@ -472,7 +515,7 @@ export function createSqlCompletionSource(input: SqlCompletionInput) {
     return {
       from: word ? word.from : context.pos,
       options: items,
-      validFor: VALID_IDENTIFIER,
+      validFor: WORD_PATTERN,
     };
   };
 }

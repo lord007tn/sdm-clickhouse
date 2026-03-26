@@ -1,6 +1,7 @@
 import {
   autocompletion,
   completionKeymap,
+  startCompletion,
 } from "@codemirror/autocomplete";
 import { sql, StandardSQL } from "@codemirror/lang-sql";
 import { keymap, EditorView, placeholder } from "@codemirror/view";
@@ -123,8 +124,11 @@ export function QueryEditor({
       autocompletion({
         override: [completionSource],
         activateOnTyping: true,
+        activateOnCompletion: () => true,
         maxRenderedOptions: 40,
         icons: true,
+        closeOnBlur: true,
+        interactionDelay: 75,
       }),
       keymap.of([
         ...completionKeymap,
@@ -137,6 +141,16 @@ export function QueryEditor({
         },
       ]),
       placeholder(placeholderText),
+      // Trigger autocomplete after typing a dot (for database.table completion)
+      EditorView.inputHandler.of((view, _from, _to, text) => {
+        if (text === ".") {
+          // Insert the dot first, then trigger autocomplete
+          window.setTimeout(() => {
+            startCompletion(view);
+          }, 10);
+        }
+        return false;
+      }),
     ],
     [completionSource, placeholderText],
   );

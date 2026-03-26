@@ -16,6 +16,7 @@ import {
   ArrowDownWideNarrow,
   ArrowUpDown,
   ArrowUpNarrowWide,
+  BarChart3,
   Check,
   CheckSquare,
   ChevronDown,
@@ -24,6 +25,7 @@ import {
   Code2,
   Copy,
   Database,
+  Edit3,
   Loader2,
   Pencil,
   Play,
@@ -83,14 +85,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+// Sheet imports removed — insights moved to Dialog
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -278,6 +273,7 @@ function App() {
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState<string | null>(null);
   const [insightsOpen, setInsightsOpen] = useState(false);
+  const [insightsTab, setInsightsTab] = useState<"overview" | "history" | "snippets" | "audit" | "logs">("overview");
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [opsDialogOpen, setOpsDialogOpen] = useState(false);
   const [opsDraft, setOpsDraft] = useState<OpsDraft>(baseOpsDraft);
@@ -336,6 +332,9 @@ function App() {
     () => new Map(),
   );
   const [applyingChanges, setApplyingChanges] = useState(false);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkEditColumn, setBulkEditColumn] = useState("");
+  const [bulkEditValue, setBulkEditValue] = useState("");
 
   /* ── Derived ── */
   const activeConnection = useMemo(
@@ -1489,6 +1488,42 @@ function App() {
     });
   };
 
+  /** Bulk set a column value for all selected rows as pending edits. */
+  const bulkSetColumnValue = () => {
+    if (selectedRowIdxs.size === 0 || !bulkEditColumn.trim() || !activeTab?.result) return;
+    const col = bulkEditColumn.trim();
+    setPendingEdits((prev) => {
+      const next = new Map(prev);
+      for (const rowIdx of selectedRowIdxs) {
+        if (pendingDeletes.has(rowIdx)) continue;
+        const row = activeTab.result!.rows[rowIdx];
+        if (!row) continue;
+        const originalValue = row[col];
+        const newValue = coerceEditedValue(bulkEditValue, originalValue);
+        next.set(`${rowIdx}:${col}`, {
+          rowIdx,
+          col,
+          originalValue,
+          newValue,
+        });
+      }
+      return next;
+    });
+    setBulkEditOpen(false);
+    setBulkEditColumn("");
+    setBulkEditValue("");
+    toast.success(`Queued bulk edit for ${selectedRowIdxs.size} row(s)`);
+  };
+
+  /** Open the bulk edit dialog for selected rows. */
+  const openBulkEdit = () => {
+    if (selectedRowIdxs.size === 0) return;
+    const columns = activeTab?.result?.columns ?? [];
+    setBulkEditColumn(columns[0] ?? "");
+    setBulkEditValue("");
+    setBulkEditOpen(true);
+  };
+
   /** Copy selected rows as JSON to clipboard. */
   const copySelectedAsJson = () => {
     if (!activeTab?.result?.rows || selectedRowIdxs.size === 0) return;
@@ -2196,7 +2231,7 @@ function App() {
                 className="flex min-h-0 flex-1 flex-col overflow-hidden"
                 data-testid="workbench-query-pane"
               >
-                {/* Compact status bar */}
+                {/* Compact status bar — clickable badges open the Insights dialog */}
                 <div className="flex items-center gap-2 border-b border-border/50 bg-card/40 px-3 py-1.5">
                   <div className="flex flex-1 flex-wrap items-center gap-1.5">
                     {overview?.serverVersion ? (
@@ -2207,39 +2242,36 @@ function App() {
                         v{overview.serverVersion}
                       </Badge>
                     ) : null}
-                    <Badge
-                      variant="secondary"
-                      className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground"
+                    <button
+                      type="button"
+                      className="inline-flex items-center rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
                       data-testid="insights-summary"
+                      onClick={() => { setInsightsTab("overview"); setInsightsOpen(true); }}
                     >
                       <Database className="mr-1 h-3 w-3" />
-                      {overview
-                        ? `${overview.databaseCount} DBs`
-                        : "..."}
-                    </Badge>
-                    <Badge
-                      variant="secondary"
-                      className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground"
+                      {overview ? `${overview.databaseCount} DBs` : "..."}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+                      onClick={() => { setInsightsTab("overview"); setInsightsOpen(true); }}
                     >
                       <Table2 className="mr-1 h-3 w-3" />
-                      {overview
-                        ? `${overview.tableCount} tables`
-                        : "..."}
-                    </Badge>
-                    <Badge
-                      variant="secondary"
+                      {overview ? `${overview.tableCount} tables` : "..."}
+                    </button>
+                    <button
+                      type="button"
                       className={cn(
-                        "rounded-full border px-2 py-0.5 text-[10px]",
+                        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] transition-colors",
                         overview && overview.activeQueryCount > 0
-                          ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
-                          : "border-border/60 bg-background/70 text-muted-foreground",
+                          ? "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                          : "border-border/60 bg-background/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
                       )}
+                      onClick={() => { setInsightsTab("overview"); setInsightsOpen(true); }}
                     >
                       <Activity className="mr-1 h-3 w-3" />
-                      {overview
-                        ? `${overview.activeQueryCount} active`
-                        : "..."}
-                    </Badge>
+                      {overview ? `${overview.activeQueryCount} active` : "..."}
+                    </button>
                     {overviewError ? (
                       <span className="text-[10px] text-amber-400" title={overviewError}>
                         Insights unavailable
@@ -2261,189 +2293,17 @@ function App() {
                         <RefreshCw className="h-3 w-3" />
                       )}
                     </Button>
-                    <Sheet open={insightsOpen} onOpenChange={setInsightsOpen}>
-                      <SheetTrigger
-                        render={
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-6 gap-1.5 px-2.5 text-[10px]"
-                            data-testid="toggle-insights-button"
-                          />
-                        }
-                      >
-                        <Sparkles className="h-3 w-3" />
-                        Insights
-                      </SheetTrigger>
-                      <SheetContent
-                        side="right"
-                        className="w-[520px] sm:max-w-[520px] overflow-y-auto"
-                      >
-                        <SheetHeader>
-                          <SheetTitle>Cluster Insights</SheetTitle>
-                          <SheetDescription>
-                            Observability, history, snippets, audit, and logs for {activeConnection?.name ?? "this connection"}.
-                          </SheetDescription>
-                        </SheetHeader>
-                        <div className="space-y-4 px-4 pb-6">
-                          <ConnectionOverview
-                            overview={overview}
-                            loading={overviewLoading}
-                            error={overviewError}
-                            disabled={!isTauriRuntime}
-                            onRefresh={refreshActiveConnectionData}
-                          />
-                          {/* History / Snippets / Audit / Logs */}
-                          <Tabs defaultValue="history">
-                            <TabsList className="h-8 gap-1 bg-transparent p-0">
-                              <TabsTrigger
-                                value="history"
-                                className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
-                              >
-                                <Clock className="h-3 w-3" />
-                                History
-                              </TabsTrigger>
-                              <TabsTrigger
-                                value="snippets"
-                                className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
-                              >
-                                <Code2 className="h-3 w-3" />
-                                Snippets
-                              </TabsTrigger>
-                              <TabsTrigger
-                                value="audit"
-                                className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
-                              >
-                                <Check className="h-3 w-3" />
-                                Audit
-                              </TabsTrigger>
-                              <TabsTrigger
-                                value="logs"
-                                className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
-                              >
-                                <Clock className="h-3 w-3" />
-                                Logs
-                              </TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="history" className="mt-2">
-                              <div className="max-h-[300px] overflow-auto rounded-lg border border-border/40">
-                                {historySql.length > 0 ? (
-                                  historySql.map((sql, idx) => (
-                                    <button
-                                      key={`${idx}-${sql}`}
-                                      className="mono mb-0.5 block w-full truncate px-2 py-1.5 text-left text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                                      onClick={() => {
-                                        if (activeTab) updateTab(activeTab.id, { sql });
-                                        setInsightsOpen(false);
-                                      }}
-                                      title={sql}
-                                    >
-                                      {sql}
-                                    </button>
-                                  ))
-                                ) : (
-                                  <p className="py-4 text-center text-[11px] text-muted-foreground/40">
-                                    No query history
-                                  </p>
-                                )}
-                              </div>
-                            </TabsContent>
-                            <TabsContent value="snippets" className="mt-2">
-                              <div className="max-h-[300px] overflow-auto rounded-lg border border-border/40">
-                                {snippets.length > 0 ? (
-                                  snippets.map((snippet) => (
-                                    <div
-                                      key={snippet.id}
-                                      className="group flex items-center gap-2 px-2 py-1.5 hover:bg-muted/50"
-                                    >
-                                      <button
-                                        className="mono min-w-0 flex-1 truncate text-left text-[11px] text-muted-foreground hover:text-foreground"
-                                        onClick={() => {
-                                          if (activeTab) updateTab(activeTab.id, { sql: snippet.sql });
-                                          setInsightsOpen(false);
-                                        }}
-                                        title={snippet.sql}
-                                      >
-                                        {snippet.name}
-                                      </button>
-                                      <button
-                                        className="rounded-md p-0.5 opacity-0 transition-opacity hover:bg-destructive/20 group-hover:opacity-100"
-                                        aria-label={`Delete snippet ${snippet.name}`}
-                                        onClick={async () => {
-                                          try {
-                                            await api.snippetDelete(snippet.id);
-                                            void loadWorkspace().catch((error) =>
-                                              toast.error(String(error)),
-                                            );
-                                          } catch (error) {
-                                            toast.error(String(error));
-                                          }
-                                        }}
-                                      >
-                                        <Trash2 className="h-3 w-3 text-muted-foreground" />
-                                      </button>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p className="py-4 text-center text-[11px] text-muted-foreground/40">
-                                    No saved snippets
-                                  </p>
-                                )}
-                              </div>
-                            </TabsContent>
-                            <TabsContent value="audit" className="mt-2">
-                              <div className="max-h-[300px] overflow-auto rounded-lg border border-border/40">
-                                {auditItems.length > 0 ? (
-                                  auditItems.map((item) => (
-                                    <div
-                                      key={item.id}
-                                      className="px-2 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/40"
-                                      title={item.payloadJson ?? ""}
-                                    >
-                                      <div className="truncate font-medium text-foreground/80">
-                                        {item.action} · {item.target}
-                                      </div>
-                                      <div className="truncate text-[10px]">
-                                        {item.createdAt}
-                                      </div>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p className="py-4 text-center text-[11px] text-muted-foreground/40">
-                                    No audit records
-                                  </p>
-                                )}
-                              </div>
-                            </TabsContent>
-                            <TabsContent value="logs" className="mt-2">
-                              <div className="max-h-[300px] overflow-auto rounded-lg border border-border/40">
-                                {appLogs.length > 0 ? (
-                                  appLogs.map((item) => (
-                                    <div
-                                      key={item.id}
-                                      className="px-2 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/40"
-                                      title={item.contextJson ?? ""}
-                                    >
-                                      <div className="truncate font-medium text-foreground/80">
-                                        [{item.level}] {item.category}
-                                      </div>
-                                      <div className="truncate text-[10px]">
-                                        {item.message}
-                                      </div>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p className="py-4 text-center text-[11px] text-muted-foreground/40">
-                                    No app logs
-                                  </p>
-                                )}
-                              </div>
-                            </TabsContent>
-                          </Tabs>
-                        </div>
-                      </SheetContent>
-                    </Sheet>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-6 gap-1.5 px-2.5 text-[10px]"
+                      data-testid="toggle-insights-button"
+                      onClick={() => { setInsightsTab("overview"); setInsightsOpen(true); }}
+                    >
+                      <BarChart3 className="h-3 w-3" />
+                      Insights
+                    </Button>
                   </div>
                 </div>
 
@@ -2630,6 +2490,15 @@ function App() {
                           >
                             <Copy className="h-3 w-3" />
                             Copy
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 gap-1 px-2 text-[11px] text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                            onClick={openBulkEdit}
+                          >
+                            <Edit3 className="h-3 w-3" />
+                            Edit{selectedRowIdxs.size > 1 ? ` (${selectedRowIdxs.size})` : ""}
                           </Button>
                           <Button
                             variant="ghost"
@@ -2892,7 +2761,7 @@ function App() {
                   {hasSelection && !hasPendingChanges && (
                     <div className="border-t border-border/30 bg-muted/10 px-3 py-1">
                       <span className="text-[10px] text-muted-foreground/60">
-                        Ctrl+Click to toggle, Shift+Click for range, Ctrl+A to select all, Delete to mark for deletion, Esc to deselect
+                        Ctrl+Click to toggle · Shift+Click for range · Ctrl+A to select all · Delete to mark for deletion · Ctrl+S to apply · Esc to deselect
                       </span>
                     </div>
                   )}
@@ -3248,6 +3117,255 @@ function App() {
         isTauriRuntime={isTauriRuntime}
         onSaved={loadConnections}
       />
+
+      {/* ── Insights Dialog (replaces Sheet for better UX) ── */}
+      <Dialog open={insightsOpen} onOpenChange={setInsightsOpen}>
+        <DialogContent className="max-h-[90vh] overflow-hidden border-border/60 sm:max-w-[820px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              Cluster Insights
+              {overview?.serverVersion ? (
+                <Badge variant="secondary" className="ml-1 text-[10px] font-normal">
+                  v{overview.serverVersion}
+                </Badge>
+              ) : null}
+            </DialogTitle>
+            <DialogDescription>
+              Observability, history, snippets, audit, and logs for {activeConnection?.name ?? "this connection"}.
+            </DialogDescription>
+          </DialogHeader>
+          <Tabs value={insightsTab} onValueChange={(v) => setInsightsTab(v as typeof insightsTab)}>
+            <TabsList className="h-8 gap-1 bg-transparent p-0">
+              <TabsTrigger
+                value="overview"
+                className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
+              >
+                <BarChart3 className="h-3 w-3" />
+                Overview
+              </TabsTrigger>
+              <TabsTrigger
+                value="history"
+                className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
+              >
+                <Clock className="h-3 w-3" />
+                History
+              </TabsTrigger>
+              <TabsTrigger
+                value="snippets"
+                className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
+              >
+                <Code2 className="h-3 w-3" />
+                Snippets
+              </TabsTrigger>
+              <TabsTrigger
+                value="audit"
+                className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
+              >
+                <Check className="h-3 w-3" />
+                Audit
+              </TabsTrigger>
+              <TabsTrigger
+                value="logs"
+                className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
+              >
+                <Clock className="h-3 w-3" />
+                Logs
+              </TabsTrigger>
+            </TabsList>
+            <div className="mt-3 max-h-[60vh] overflow-y-auto">
+              <TabsContent value="overview" className="mt-0">
+                <ConnectionOverview
+                  overview={overview}
+                  loading={overviewLoading}
+                  error={overviewError}
+                  disabled={!isTauriRuntime}
+                  onRefresh={refreshActiveConnectionData}
+                />
+              </TabsContent>
+              <TabsContent value="history" className="mt-0">
+                <div className="max-h-[400px] overflow-auto rounded-lg border border-border/40">
+                  {historySql.length > 0 ? (
+                    historySql.map((sql, idx) => (
+                      <button
+                        key={`${idx}-${sql}`}
+                        className="mono mb-0.5 block w-full truncate px-2 py-1.5 text-left text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                        onClick={() => {
+                          if (activeTab) updateTab(activeTab.id, { sql });
+                          setInsightsOpen(false);
+                        }}
+                        title={sql}
+                      >
+                        {sql}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="py-4 text-center text-[11px] text-muted-foreground/40">
+                      No query history
+                    </p>
+                  )}
+                </div>
+              </TabsContent>
+              <TabsContent value="snippets" className="mt-0">
+                <div className="max-h-[400px] overflow-auto rounded-lg border border-border/40">
+                  {snippets.length > 0 ? (
+                    snippets.map((snippet) => (
+                      <div
+                        key={snippet.id}
+                        className="group flex items-center gap-2 px-2 py-1.5 hover:bg-muted/50"
+                      >
+                        <button
+                          className="mono min-w-0 flex-1 truncate text-left text-[11px] text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            if (activeTab) updateTab(activeTab.id, { sql: snippet.sql });
+                            setInsightsOpen(false);
+                          }}
+                          title={snippet.sql}
+                        >
+                          {snippet.name}
+                        </button>
+                        <button
+                          className="rounded-md p-0.5 opacity-0 transition-opacity hover:bg-destructive/20 group-hover:opacity-100"
+                          aria-label={`Delete snippet ${snippet.name}`}
+                          onClick={async () => {
+                            try {
+                              await api.snippetDelete(snippet.id);
+                              void loadWorkspace().catch((error) =>
+                                toast.error(String(error)),
+                              );
+                            } catch (error) {
+                              toast.error(String(error));
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3 text-muted-foreground" />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="py-4 text-center text-[11px] text-muted-foreground/40">
+                      No saved snippets
+                    </p>
+                  )}
+                </div>
+              </TabsContent>
+              <TabsContent value="audit" className="mt-0">
+                <div className="max-h-[400px] overflow-auto rounded-lg border border-border/40">
+                  {auditItems.length > 0 ? (
+                    auditItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="px-2 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/40"
+                        title={item.payloadJson ?? ""}
+                      >
+                        <div className="truncate font-medium text-foreground/80">
+                          {item.action} · {item.target}
+                        </div>
+                        <div className="truncate text-[10px]">
+                          {item.createdAt}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="py-4 text-center text-[11px] text-muted-foreground/40">
+                      No audit records
+                    </p>
+                  )}
+                </div>
+              </TabsContent>
+              <TabsContent value="logs" className="mt-0">
+                <div className="max-h-[400px] overflow-auto rounded-lg border border-border/40">
+                  {appLogs.length > 0 ? (
+                    appLogs.map((item) => (
+                      <div
+                        key={item.id}
+                        className="px-2 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/40"
+                        title={item.contextJson ?? ""}
+                      >
+                        <div className="truncate font-medium text-foreground/80">
+                          [{item.level}] {item.category}
+                        </div>
+                        <div className="truncate text-[10px]">
+                          {item.message}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="py-4 text-center text-[11px] text-muted-foreground/40">
+                      No app logs
+                    </p>
+                  )}
+                </div>
+              </TabsContent>
+            </div>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Bulk Edit Dialog ── */}
+      <Dialog open={bulkEditOpen} onOpenChange={setBulkEditOpen}>
+        <DialogContent className="border-border/60 sm:max-w-[440px]">
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              bulkSetColumnValue();
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Edit3 className="h-4 w-4 text-amber-400" />
+                Bulk Edit — {selectedRowIdxs.size} row{selectedRowIdxs.size !== 1 ? "s" : ""}
+              </DialogTitle>
+              <DialogDescription>
+                Set a column value for all selected rows. Changes are staged and must be applied.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label htmlFor="bulk-edit-column" className="text-xs font-medium text-muted-foreground">
+                  Column
+                </label>
+                <select
+                  id="bulk-edit-column"
+                  value={bulkEditColumn}
+                  className="h-9 w-full rounded-md border border-border/60 bg-background px-2 text-sm"
+                  onChange={(e) => setBulkEditColumn(e.currentTarget.value)}
+                >
+                  {(activeTab?.result?.columns ?? []).map((col) => (
+                    <option key={col} value={col}>{col}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="bulk-edit-value" className="text-xs font-medium text-muted-foreground">
+                  New value
+                </label>
+                <Input
+                  id="bulk-edit-value"
+                  className="mono"
+                  value={bulkEditValue}
+                  placeholder="Enter the new value for the selected column"
+                  autoFocus
+                  onChange={(e) => setBulkEditValue(e.currentTarget.value)}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Tip: Type NULL for null. Values are auto-coerced to match the column type.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setBulkEditOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="gap-1.5 bg-amber-600 hover:bg-amber-500">
+                <Edit3 className="h-3.5 w-3.5" />
+                Stage Edit
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
