@@ -12,10 +12,12 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { confirm, open, save } from "@tauri-apps/plugin-dialog";
 import {
+  Activity,
   ArrowDownWideNarrow,
   ArrowUpDown,
   ArrowUpNarrowWide,
   Check,
+  CheckSquare,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -81,6 +83,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -309,7 +319,10 @@ function App() {
 
   /* ── Inline editing state ── */
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
-  const [selectedRowIdx, setSelectedRowIdx] = useState<number | null>(null);
+  const [selectedRowIdxs, setSelectedRowIdxs] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const lastClickedRowRef = useRef<number | null>(null);
   const [resultFilter, setResultFilter] = useState("");
   const [resultSorting, setResultSorting] = useState<SortingState>([]);
   const savePendingRef = useRef(false);
@@ -334,6 +347,7 @@ function App() {
     [tabs, activeTabId],
   );
   const hasPendingChanges = pendingEdits.size > 0 || pendingDeletes.size > 0;
+  const hasSelection = selectedRowIdxs.size > 0;
   const normalizedSchemaFilter = schemaFilter.trim().toLowerCase();
   const filteredDatabases = useMemo(() => {
     if (!normalizedSchemaFilter) return databases;
@@ -446,9 +460,42 @@ function App() {
     [selectedTableColumns],
   );
 
+  const handleRowClick = (idx: number, e: React.MouseEvent | React.KeyboardEvent) => {
+    const isCtrl = e.ctrlKey || e.metaKey;
+    const isShift = e.shiftKey;
+
+    if (isShift && lastClickedRowRef.current !== null) {
+      // Range select from last clicked to current
+      const start = Math.min(lastClickedRowRef.current, idx);
+      const end = Math.max(lastClickedRowRef.current, idx);
+      setSelectedRowIdxs((prev) => {
+        const next = new Set(isCtrl ? prev : [] as number[]);
+        for (let i = start; i <= end; i++) next.add(i);
+        return next;
+      });
+    } else if (isCtrl) {
+      // Toggle individual row
+      setSelectedRowIdxs((prev) => {
+        const next = new Set(prev);
+        if (next.has(idx)) next.delete(idx);
+        else next.add(idx);
+        return next;
+      });
+      lastClickedRowRef.current = idx;
+    } else {
+      // Single select (toggle if already the only selection)
+      setSelectedRowIdxs((prev) => {
+        if (prev.size === 1 && prev.has(idx)) return new Set();
+        return new Set([idx]);
+      });
+      lastClickedRowRef.current = idx;
+    }
+  };
+
   const renderResultRow = (row: Row<ResultRow>, rowHeight?: number) => {
     const idx = row.index;
     const isPendingDelete = pendingDeletes.has(idx);
+    const isSelected = selectedRowIdxs.has(idx);
 
     return (
       <TableRow
@@ -460,15 +507,15 @@ function App() {
           "cursor-pointer transition-colors",
           isPendingDelete
             ? "bg-destructive/5 hover:bg-destructive/10"
-            : selectedRowIdx === idx
+            : isSelected
               ? "bg-primary/10 hover:bg-primary/15"
               : "hover:bg-muted/30",
         )}
-        onClick={() => setSelectedRowIdx(selectedRowIdx === idx ? null : idx)}
+        onClick={(e) => handleRowClick(idx, e)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            setSelectedRowIdx(selectedRowIdx === idx ? null : idx);
+            handleRowClick(idx, e);
           }
         }}
       >
@@ -773,7 +820,8 @@ function App() {
   useEffect(() => {
     setPendingDeletes(new Set());
     setPendingEdits(new Map());
-    setSelectedRowIdx(null);
+    setSelectedRowIdxs(new Set());
+    lastClickedRowRef.current = null;
     setEditingCell(null);
   }, [activeTabId, activeConnectionId]);
 
@@ -835,7 +883,10 @@ function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (editingCell) setEditingCell(null);
-        else if (selectedRowIdx !== null) setSelectedRowIdx(null);
+        else if (selectedRowIdxs.size > 0) {
+          setSelectedRowIdxs(new Set());
+          lastClickedRowRef.current = null;
+        }
       }
       // Ctrl+S / Cmd+S → apply pending changes
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
@@ -844,11 +895,36 @@ function App() {
           void applyChanges();
         }
       }
+      // Ctrl+A / Cmd+A → select all result rows (when focus is on the result table)
+      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+        const target = e.target as HTMLElement;
+        const isInEditor =
+          target.closest("[data-testid='sql-editor']") ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA";
+        if (!isInEditor && resultTableRows.length > 0) {
+          e.preventDefault();
+          setSelectedRowIdxs(
+            new Set(resultTableRows.map((row) => row.index)),
+          );
+        }
+      }
+      // Delete key → mark selected rows for deletion
+      if (e.key === "Delete" && selectedRowIdxs.size > 0) {
+        const target = e.target as HTMLElement;
+        if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
+          setPendingDeletes((prev) => {
+            const next = new Set(prev);
+            for (const idx of selectedRowIdxs) next.add(idx);
+            return next;
+          });
+        }
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingCell, selectedRowIdx, hasPendingChanges, applyingChanges]);
+  }, [editingCell, selectedRowIdxs, hasPendingChanges, applyingChanges, resultTableRows]);
 
   /* ── Tab / query helpers ── */
   const updateTab = (id: string, patch: Partial<QueryTab>) =>
@@ -908,7 +984,8 @@ function App() {
   const clearPendingState = () => {
     setPendingDeletes(new Set());
     setPendingEdits(new Map());
-    setSelectedRowIdx(null);
+    setSelectedRowIdxs(new Set());
+    lastClickedRowRef.current = null;
     setEditingCell(null);
   };
 
@@ -1392,18 +1469,40 @@ function App() {
     setEditingCell(null);
   };
 
-  /** Toggle a row as pending delete. */
-  const togglePendingDelete = (rowIdx: number) => {
+  /** Bulk mark all selected rows for deletion. */
+  const bulkMarkDelete = () => {
+    if (selectedRowIdxs.size === 0) return;
     setPendingDeletes((prev) => {
       const next = new Set(prev);
-      if (next.has(rowIdx)) {
-        next.delete(rowIdx);
-      } else {
-        next.add(rowIdx);
-      }
+      for (const idx of selectedRowIdxs) next.add(idx);
       return next;
     });
   };
+
+  /** Bulk unmark all selected rows from deletion. */
+  const bulkUnmarkDelete = () => {
+    if (selectedRowIdxs.size === 0) return;
+    setPendingDeletes((prev) => {
+      const next = new Set(prev);
+      for (const idx of selectedRowIdxs) next.delete(idx);
+      return next;
+    });
+  };
+
+  /** Copy selected rows as JSON to clipboard. */
+  const copySelectedAsJson = () => {
+    if (!activeTab?.result?.rows || selectedRowIdxs.size === 0) return;
+    const rows = Array.from(selectedRowIdxs)
+      .sort((a, b) => a - b)
+      .map((idx) => activeTab.result!.rows[idx])
+      .filter(Boolean);
+    navigator.clipboard.writeText(JSON.stringify(rows, null, 2));
+    toast.success(`${rows.length} row${rows.length > 1 ? "s" : ""} copied as JSON`);
+  };
+
+  /** Check if all selected rows are already marked for deletion. */
+  const allSelectedMarkedForDelete = selectedRowIdxs.size > 0 &&
+    Array.from(selectedRowIdxs).every((idx) => pendingDeletes.has(idx));
 
   /** Apply all pending edits and deletes to the server. */
   const applyChanges = async () => {
@@ -2097,117 +2196,256 @@ function App() {
                 className="flex min-h-0 flex-1 flex-col overflow-hidden"
                 data-testid="workbench-query-pane"
               >
-                <section className="border-b border-border/50 bg-[linear-gradient(180deg,rgba(250,248,240,0.9),rgba(248,245,236,0.7))] px-3 py-3 dark:bg-[linear-gradient(180deg,rgba(21,27,36,0.96),rgba(13,18,27,0.92))]">
-                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="space-y-1">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-muted-foreground/80">
-                        Observability
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-sm font-semibold tracking-tight text-foreground">
-                          Cluster overview stays secondary
-                        </h2>
-                        {overview?.serverVersion ? (
-                          <Badge
-                            variant="secondary"
-                            className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-                          >
-                            {overview.serverVersion}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <p className="max-w-3xl text-[11px] leading-5 text-muted-foreground">
-                        Keep the query workspace in front. Open insights only
-                        when you need cluster pressure, storage mix, or part
-                        heat.
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
+                {/* Compact status bar */}
+                <div className="flex items-center gap-2 border-b border-border/50 bg-card/40 px-3 py-1.5">
+                  <div className="flex flex-1 flex-wrap items-center gap-1.5">
+                    {overview?.serverVersion ? (
                       <Badge
                         variant="secondary"
-                        className="rounded-full border border-border/60 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground"
-                        data-testid="insights-summary"
+                        className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
                       >
-                        <Database className="mr-1 h-3 w-3" />
-                        {overview
-                          ? `${overview.databaseCount} DBs`
-                          : "No DB stats"}
+                        v{overview.serverVersion}
                       </Badge>
-                      <Badge
-                        variant="secondary"
-                        className="rounded-full border border-border/60 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground"
-                      >
-                        <Table2 className="mr-1 h-3 w-3" />
-                        {overview
-                          ? `${overview.tableCount} tables`
-                          : "No table stats"}
-                      </Badge>
-                      <Badge
-                        variant="secondary"
-                        className="rounded-full border border-border/60 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground"
-                      >
-                        <Server className="mr-1 h-3 w-3" />
-                        {overview
-                          ? `${overview.activeQueryCount} active queries`
-                          : "No live queries"}
-                      </Badge>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={insightsOpen ? "secondary" : "outline"}
-                        className="h-8 gap-1.5 px-3 text-[11px]"
-                        data-testid="toggle-insights-button"
-                        onClick={() => setInsightsOpen((current) => !current)}
-                      >
-                        {insightsOpen ? (
-                          <ChevronDown className="h-3.5 w-3.5" />
-                        ) : (
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        )}
-                        {insightsOpen ? "Hide insights" : "Open insights"}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 gap-1.5 px-2.5 text-[11px]"
-                        disabled={!isTauriRuntime || overviewLoading}
-                        onClick={refreshActiveConnectionData}
-                      >
-                        {overviewLoading ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <RefreshCw className="h-3.5 w-3.5" />
-                        )}
-                        Refresh
-                      </Button>
-                    </div>
-                  </div>
-
-                  {overviewError ? (
-                    <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-200">
-                      Insights could not be refreshed: {overviewError}
-                    </div>
-                  ) : null}
-                </section>
-
-                {insightsOpen ? (
-                  <div className="border-b border-border/50 bg-background/80 px-3 py-3 backdrop-blur">
-                    <div
-                      className="max-h-[38vh] overflow-auto rounded-[28px] border border-border/60 bg-card/92 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.55)]"
-                      data-testid="observability-panel"
+                    ) : null}
+                    <Badge
+                      variant="secondary"
+                      className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground"
+                      data-testid="insights-summary"
                     >
-                      <ConnectionOverview
-                        overview={overview}
-                        loading={overviewLoading}
-                        error={overviewError}
-                        disabled={!isTauriRuntime}
-                        onRefresh={refreshActiveConnectionData}
-                      />
-                    </div>
+                      <Database className="mr-1 h-3 w-3" />
+                      {overview
+                        ? `${overview.databaseCount} DBs`
+                        : "..."}
+                    </Badge>
+                    <Badge
+                      variant="secondary"
+                      className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground"
+                    >
+                      <Table2 className="mr-1 h-3 w-3" />
+                      {overview
+                        ? `${overview.tableCount} tables`
+                        : "..."}
+                    </Badge>
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 text-[10px]",
+                        overview && overview.activeQueryCount > 0
+                          ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                          : "border-border/60 bg-background/70 text-muted-foreground",
+                      )}
+                    >
+                      <Activity className="mr-1 h-3 w-3" />
+                      {overview
+                        ? `${overview.activeQueryCount} active`
+                        : "..."}
+                    </Badge>
+                    {overviewError ? (
+                      <span className="text-[10px] text-amber-400" title={overviewError}>
+                        Insights unavailable
+                      </span>
+                    ) : null}
                   </div>
-                ) : null}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 gap-1 px-2 text-[10px]"
+                      disabled={!isTauriRuntime || overviewLoading}
+                      onClick={refreshActiveConnectionData}
+                    >
+                      {overviewLoading ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                    </Button>
+                    <Sheet open={insightsOpen} onOpenChange={setInsightsOpen}>
+                      <SheetTrigger
+                        render={
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 gap-1.5 px-2.5 text-[10px]"
+                            data-testid="toggle-insights-button"
+                          />
+                        }
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        Insights
+                      </SheetTrigger>
+                      <SheetContent
+                        side="right"
+                        className="w-[520px] sm:max-w-[520px] overflow-y-auto"
+                      >
+                        <SheetHeader>
+                          <SheetTitle>Cluster Insights</SheetTitle>
+                          <SheetDescription>
+                            Observability, history, snippets, audit, and logs for {activeConnection?.name ?? "this connection"}.
+                          </SheetDescription>
+                        </SheetHeader>
+                        <div className="space-y-4 px-4 pb-6">
+                          <ConnectionOverview
+                            overview={overview}
+                            loading={overviewLoading}
+                            error={overviewError}
+                            disabled={!isTauriRuntime}
+                            onRefresh={refreshActiveConnectionData}
+                          />
+                          {/* History / Snippets / Audit / Logs */}
+                          <Tabs defaultValue="history">
+                            <TabsList className="h-8 gap-1 bg-transparent p-0">
+                              <TabsTrigger
+                                value="history"
+                                className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
+                              >
+                                <Clock className="h-3 w-3" />
+                                History
+                              </TabsTrigger>
+                              <TabsTrigger
+                                value="snippets"
+                                className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
+                              >
+                                <Code2 className="h-3 w-3" />
+                                Snippets
+                              </TabsTrigger>
+                              <TabsTrigger
+                                value="audit"
+                                className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
+                              >
+                                <Check className="h-3 w-3" />
+                                Audit
+                              </TabsTrigger>
+                              <TabsTrigger
+                                value="logs"
+                                className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
+                              >
+                                <Clock className="h-3 w-3" />
+                                Logs
+                              </TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="history" className="mt-2">
+                              <div className="max-h-[300px] overflow-auto rounded-lg border border-border/40">
+                                {historySql.length > 0 ? (
+                                  historySql.map((sql, idx) => (
+                                    <button
+                                      key={`${idx}-${sql}`}
+                                      className="mono mb-0.5 block w-full truncate px-2 py-1.5 text-left text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                      onClick={() => {
+                                        if (activeTab) updateTab(activeTab.id, { sql });
+                                        setInsightsOpen(false);
+                                      }}
+                                      title={sql}
+                                    >
+                                      {sql}
+                                    </button>
+                                  ))
+                                ) : (
+                                  <p className="py-4 text-center text-[11px] text-muted-foreground/40">
+                                    No query history
+                                  </p>
+                                )}
+                              </div>
+                            </TabsContent>
+                            <TabsContent value="snippets" className="mt-2">
+                              <div className="max-h-[300px] overflow-auto rounded-lg border border-border/40">
+                                {snippets.length > 0 ? (
+                                  snippets.map((snippet) => (
+                                    <div
+                                      key={snippet.id}
+                                      className="group flex items-center gap-2 px-2 py-1.5 hover:bg-muted/50"
+                                    >
+                                      <button
+                                        className="mono min-w-0 flex-1 truncate text-left text-[11px] text-muted-foreground hover:text-foreground"
+                                        onClick={() => {
+                                          if (activeTab) updateTab(activeTab.id, { sql: snippet.sql });
+                                          setInsightsOpen(false);
+                                        }}
+                                        title={snippet.sql}
+                                      >
+                                        {snippet.name}
+                                      </button>
+                                      <button
+                                        className="rounded-md p-0.5 opacity-0 transition-opacity hover:bg-destructive/20 group-hover:opacity-100"
+                                        aria-label={`Delete snippet ${snippet.name}`}
+                                        onClick={async () => {
+                                          try {
+                                            await api.snippetDelete(snippet.id);
+                                            void loadWorkspace().catch((error) =>
+                                              toast.error(String(error)),
+                                            );
+                                          } catch (error) {
+                                            toast.error(String(error));
+                                          }
+                                        }}
+                                      >
+                                        <Trash2 className="h-3 w-3 text-muted-foreground" />
+                                      </button>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="py-4 text-center text-[11px] text-muted-foreground/40">
+                                    No saved snippets
+                                  </p>
+                                )}
+                              </div>
+                            </TabsContent>
+                            <TabsContent value="audit" className="mt-2">
+                              <div className="max-h-[300px] overflow-auto rounded-lg border border-border/40">
+                                {auditItems.length > 0 ? (
+                                  auditItems.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="px-2 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/40"
+                                      title={item.payloadJson ?? ""}
+                                    >
+                                      <div className="truncate font-medium text-foreground/80">
+                                        {item.action} · {item.target}
+                                      </div>
+                                      <div className="truncate text-[10px]">
+                                        {item.createdAt}
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="py-4 text-center text-[11px] text-muted-foreground/40">
+                                    No audit records
+                                  </p>
+                                )}
+                              </div>
+                            </TabsContent>
+                            <TabsContent value="logs" className="mt-2">
+                              <div className="max-h-[300px] overflow-auto rounded-lg border border-border/40">
+                                {appLogs.length > 0 ? (
+                                  appLogs.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="px-2 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/40"
+                                      title={item.contextJson ?? ""}
+                                    >
+                                      <div className="truncate font-medium text-foreground/80">
+                                        [{item.level}] {item.category}
+                                      </div>
+                                      <div className="truncate text-[10px]">
+                                        {item.message}
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="py-4 text-center text-[11px] text-muted-foreground/40">
+                                    No app logs
+                                  </p>
+                                )}
+                              </div>
+                            </TabsContent>
+                          </Tabs>
+                        </div>
+                      </SheetContent>
+                    </Sheet>
+                  </div>
+                </div>
 
                 {/* Tab bar */}
                 <div className="flex items-center border-b border-border/50 bg-muted/20">
@@ -2371,60 +2609,57 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Pending changes bar */}
-                  {(hasPendingChanges || selectedRowIdx !== null) && (
+                  {/* Selection + pending changes bar */}
+                  {(hasPendingChanges || hasSelection) && (
                     <div className="flex items-center gap-2 border-b border-border/40 bg-card/80 px-3 py-1.5">
-                      {/* Left: selection info */}
-                      {selectedRowIdx !== null &&
-                        activeTab?.result?.rows?.[selectedRowIdx] && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-muted-foreground">
-                              Row {selectedRowIdx + 1}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 gap-1 px-2 text-[11px]"
-                              onClick={() => {
-                                const row =
-                                  activeTab.result!.rows[selectedRowIdx];
-                                navigator.clipboard.writeText(
-                                  JSON.stringify(row, null, 2),
-                                );
-                                toast.success("Row copied as JSON");
-                              }}
-                            >
-                              <Copy className="h-3 w-3" />
-                              Copy
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className={cn(
-                                "h-6 gap-1 px-2 text-[11px]",
-                                pendingDeletes.has(selectedRowIdx)
-                                  ? "text-muted-foreground"
-                                  : "text-destructive hover:bg-destructive/10 hover:text-destructive",
-                              )}
-                              onClick={() =>
-                                togglePendingDelete(selectedRowIdx)
-                              }
-                            >
-                              {pendingDeletes.has(selectedRowIdx) ? (
-                                <>
-                                  <Undo2 className="h-3 w-3" />
-                                  Unmark
-                                </>
-                              ) : (
-                                <>
-                                  <Trash2 className="h-3 w-3" />
-                                  Delete
-                                </>
-                              )}
-                            </Button>
-                            <div className="h-4 w-px bg-border/40" />
-                          </div>
-                        )}
+                      {/* Left: selection info + bulk actions */}
+                      {hasSelection && (
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant="secondary"
+                            className="h-5 gap-1 bg-primary/10 px-1.5 text-[10px] text-primary"
+                          >
+                            <CheckSquare className="h-2.5 w-2.5" />
+                            {selectedRowIdxs.size} selected
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 gap-1 px-2 text-[11px]"
+                            onClick={copySelectedAsJson}
+                          >
+                            <Copy className="h-3 w-3" />
+                            Copy
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn(
+                              "h-6 gap-1 px-2 text-[11px]",
+                              allSelectedMarkedForDelete
+                                ? "text-muted-foreground"
+                                : "text-destructive hover:bg-destructive/10 hover:text-destructive",
+                            )}
+                            onClick={() => {
+                              if (allSelectedMarkedForDelete) bulkUnmarkDelete();
+                              else bulkMarkDelete();
+                            }}
+                          >
+                            {allSelectedMarkedForDelete ? (
+                              <>
+                                <Undo2 className="h-3 w-3" />
+                                Unmark
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="h-3 w-3" />
+                                Delete{selectedRowIdxs.size > 1 ? ` (${selectedRowIdxs.size})` : ""}
+                              </>
+                            )}
+                          </Button>
+                          <div className="h-4 w-px bg-border/40" />
+                        </div>
+                      )}
 
                       {/* Center: pending changes summary */}
                       {hasPendingChanges && (
@@ -2481,12 +2716,15 @@ function App() {
                             </Button>
                           </>
                         )}
-                        {!hasPendingChanges && selectedRowIdx !== null && (
+                        {!hasPendingChanges && hasSelection && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-6 px-1.5 text-muted-foreground"
-                            onClick={() => setSelectedRowIdx(null)}
+                            onClick={() => {
+                              setSelectedRowIdxs(new Set());
+                              lastClickedRowRef.current = null;
+                            }}
                           >
                             <X className="h-3 w-3" />
                           </Button>
@@ -2650,182 +2888,14 @@ function App() {
                     )}
                   </div>
 
-                  {/* History / Snippets */}
-                  <div className="h-[180px] flex-shrink-0 border-t border-border/50">
-                    <Tabs
-                      defaultValue="history"
-                      className="flex h-full flex-col"
-                    >
-                      <div className="flex items-center border-b border-border/30 px-3">
-                        <TabsList className="h-8 gap-1 bg-transparent p-0">
-                          <TabsTrigger
-                            value="history"
-                            className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
-                          >
-                            <Clock className="h-3 w-3" />
-                            History
-                          </TabsTrigger>
-                          <TabsTrigger
-                            value="snippets"
-                            className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
-                          >
-                            <Code2 className="h-3 w-3" />
-                            Snippets
-                          </TabsTrigger>
-                          <TabsTrigger
-                            value="audit"
-                            className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
-                          >
-                            <Check className="h-3 w-3" />
-                            Audit
-                          </TabsTrigger>
-                          <TabsTrigger
-                            value="logs"
-                            className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60"
-                          >
-                            <Clock className="h-3 w-3" />
-                            Logs
-                          </TabsTrigger>
-                        </TabsList>
-                      </div>
-                      <TabsContent
-                        value="history"
-                        className="mt-0 flex-1 overflow-hidden p-0"
-                      >
-                        <ScrollArea className="h-full">
-                          <div className="p-1.5">
-                            {historySql.length > 0 ? (
-                              historySql.map((sql, idx) => (
-                                <button
-                                  key={`${idx}-${sql}`}
-                                  className="mono mb-0.5 block w-full truncate rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                                  onClick={() =>
-                                    activeTab &&
-                                    updateTab(activeTab.id, { sql })
-                                  }
-                                  title={sql}
-                                >
-                                  {sql}
-                                </button>
-                              ))
-                            ) : (
-                              <p className="py-4 text-center text-[11px] text-muted-foreground/40">
-                                No query history
-                              </p>
-                            )}
-                          </div>
-                        </ScrollArea>
-                      </TabsContent>
-                      <TabsContent
-                        value="snippets"
-                        className="mt-0 flex-1 overflow-hidden p-0"
-                      >
-                        <ScrollArea className="h-full">
-                          <div className="p-1.5">
-                            {snippets.length > 0 ? (
-                              snippets.map((snippet) => (
-                                <div
-                                  key={snippet.id}
-                                  className="group mb-0.5 flex items-center gap-2 rounded-md px-2 py-1 hover:bg-muted/50"
-                                >
-                                  <button
-                                    className="mono min-w-0 flex-1 truncate text-left text-[11px] text-muted-foreground hover:text-foreground"
-                                    onClick={() =>
-                                      activeTab &&
-                                      updateTab(activeTab.id, {
-                                        sql: snippet.sql,
-                                      })
-                                    }
-                                    title={snippet.sql}
-                                  >
-                                    {snippet.name}
-                                  </button>
-                                  <button
-                                    className="rounded-md p-0.5 opacity-0 transition-opacity hover:bg-destructive/20 group-hover:opacity-100"
-                                    aria-label={`Delete snippet ${snippet.name}`}
-                                    onClick={async () => {
-                                      try {
-                                        await api.snippetDelete(snippet.id);
-                                        void loadWorkspace().catch((error) =>
-                                          toast.error(String(error)),
-                                        );
-                                      } catch (error) {
-                                        toast.error(String(error));
-                                      }
-                                    }}
-                                  >
-                                    <Trash2 className="h-3 w-3 text-muted-foreground" />
-                                  </button>
-                                </div>
-                              ))
-                            ) : (
-                              <p className="py-4 text-center text-[11px] text-muted-foreground/40">
-                                No saved snippets
-                              </p>
-                            )}
-                          </div>
-                        </ScrollArea>
-                      </TabsContent>
-                      <TabsContent
-                        value="audit"
-                        className="mt-0 flex-1 overflow-hidden p-0"
-                      >
-                        <ScrollArea className="h-full">
-                          <div className="p-1.5">
-                            {auditItems.length > 0 ? (
-                              auditItems.map((item) => (
-                                <div
-                                  key={item.id}
-                                  className="mb-0.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/40"
-                                  title={item.payloadJson ?? ""}
-                                >
-                                  <div className="truncate font-medium text-foreground/80">
-                                    {item.action} · {item.target}
-                                  </div>
-                                  <div className="truncate text-[10px]">
-                                    {item.createdAt}
-                                  </div>
-                                </div>
-                              ))
-                            ) : (
-                              <p className="py-4 text-center text-[11px] text-muted-foreground/40">
-                                No audit records
-                              </p>
-                            )}
-                          </div>
-                        </ScrollArea>
-                      </TabsContent>
-                      <TabsContent
-                        value="logs"
-                        className="mt-0 flex-1 overflow-hidden p-0"
-                      >
-                        <ScrollArea className="h-full">
-                          <div className="p-1.5">
-                            {appLogs.length > 0 ? (
-                              appLogs.map((item) => (
-                                <div
-                                  key={item.id}
-                                  className="mb-0.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/40"
-                                  title={item.contextJson ?? ""}
-                                >
-                                  <div className="truncate font-medium text-foreground/80">
-                                    [{item.level}] {item.category}
-                                  </div>
-                                  <div className="truncate text-[10px]">
-                                    {item.message}
-                                  </div>
-                                </div>
-                              ))
-                            ) : (
-                              <p className="py-4 text-center text-[11px] text-muted-foreground/40">
-                                No app logs
-                              </p>
-                            )}
-                          </div>
-                        </ScrollArea>
-                      </TabsContent>
-                    </Tabs>
-                  </div>
+                  {/* Selection hints */}
+                  {hasSelection && !hasPendingChanges && (
+                    <div className="border-t border-border/30 bg-muted/10 px-3 py-1">
+                      <span className="text-[10px] text-muted-foreground/60">
+                        Ctrl+Click to toggle, Shift+Click for range, Ctrl+A to select all, Delete to mark for deletion, Esc to deselect
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

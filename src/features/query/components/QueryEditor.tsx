@@ -1,4 +1,7 @@
-import { autocompletion } from "@codemirror/autocomplete";
+import {
+  autocompletion,
+  completionKeymap,
+} from "@codemirror/autocomplete";
 import { sql, StandardSQL } from "@codemirror/lang-sql";
 import { keymap, EditorView, placeholder } from "@codemirror/view";
 import CodeMirror, { type Extension } from "@uiw/react-codemirror";
@@ -59,9 +62,27 @@ const queryEditorTheme = EditorView.theme(
       borderRadius: "0.5rem",
       border: "1px solid var(--color-border)",
       backgroundColor: "var(--color-card)",
+      boxShadow: "0 8px 32px -12px rgba(0,0,0,0.4)",
+      maxHeight: "260px",
+    },
+    ".cm-tooltip-autocomplete > ul": {
+      fontFamily: '"JetBrains Mono", monospace',
+      fontSize: "0.8rem",
+    },
+    ".cm-tooltip-autocomplete > ul > li": {
+      padding: "3px 10px",
+      lineHeight: "1.4",
     },
     ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
       backgroundColor: "var(--color-muted)",
+    },
+    ".cm-completionIcon": {
+      opacity: "0.6",
+    },
+    ".cm-completionDetail": {
+      opacity: "0.5",
+      fontStyle: "normal",
+      fontSize: "0.72rem",
     },
   },
   { dark: true },
@@ -102,8 +123,11 @@ export function QueryEditor({
       autocompletion({
         override: [completionSource],
         activateOnTyping: true,
+        maxRenderedOptions: 40,
+        icons: true,
       }),
       keymap.of([
+        ...completionKeymap,
         {
           key: "Mod-Enter",
           run: () => {
@@ -132,6 +156,7 @@ export function QueryEditor({
           lineNumbers: false,
           foldGutter: false,
           highlightActiveLineGutter: false,
+          autocompletion: false,
         }}
       />
     </div>
