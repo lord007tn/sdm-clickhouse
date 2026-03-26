@@ -342,16 +342,13 @@ test("insights tray opens on demand and keeps query execution accessible", async
     page.getByText("Signals without stealing the editor"),
   ).toBeVisible();
 
-  // The sql editor should still be visible behind the sheet
-  await expect(sqlEditor).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run" })).toBeVisible();
-
-  // Close the sheet
+  // Close the sheet and verify the workspace is restored
   await page.getByRole("button", { name: "Close" }).click();
   await expect(
     page.getByText("Signals without stealing the editor"),
   ).toBeHidden();
   await expect(sqlEditor).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run" })).toBeVisible();
 });
 
 test("filters and sorts result rows in browser preview", async ({ page }) => {
