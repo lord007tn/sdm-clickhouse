@@ -278,7 +278,7 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
 
   const sqlEditor = page.getByTestId("sql-editor");
   await expect(
-    page.getByRole("button", { name: "Insights" }),
+    page.getByTestId("toggle-insights-button"),
   ).toBeVisible();
   await expect(sqlEditor).toBeVisible();
   await expect(
@@ -324,7 +324,7 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
   ).toBe(false);
 });
 
-test("insights tray opens on demand and keeps query execution accessible", async ({
+test("insights tab opens on demand and keeps query execution accessible", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -334,16 +334,16 @@ test("insights tray opens on demand and keeps query execution accessible", async
   const sqlEditor = page.getByTestId("sql-editor");
   await expect(sqlEditor).toBeVisible();
 
-  // Open the insights dialog
-  await page.getByRole("button", { name: "Insights" }).click();
+  // Open the insights tab
+  await page.getByTestId("toggle-insights-button").click();
 
-  // The dialog should contain the ConnectionOverview content
+  // The insights tab should contain the ConnectionOverview content
   await expect(
     page.getByText("Signals without stealing the editor"),
   ).toBeVisible();
 
-  // Close the dialog and verify the workspace is restored
-  await page.getByRole("button", { name: "Close" }).click();
+  // Switch back to the query tab and verify the workspace is restored
+  await page.getByRole("tab", { name: /Query/ }).first().click();
   await expect(
     page.getByText("Signals without stealing the editor"),
   ).toBeHidden();
