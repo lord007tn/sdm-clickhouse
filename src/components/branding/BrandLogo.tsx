@@ -97,25 +97,31 @@ export function BrandLogo({
   compact = false,
 }: BrandLogoProps) {
   return (
-    <div className={cn("flex items-center gap-3", className)}>
-      <BrandMark className={markClassName} />
+    <div className={cn("flex items-center gap-2.5", className)}>
+      <BrandMark className={cn(compact ? "size-7" : "size-10", markClassName)} />
       <div className="min-w-0">
-        <div className="text-[0.62rem] font-semibold uppercase tracking-[0.34em] text-primary/75">
-          SDM
-        </div>
-        <div
-          className={cn(
-            "truncate text-base font-semibold tracking-[-0.02em] text-foreground",
-            compact && "text-sm",
-          )}
-        >
-          ClickHouse
-        </div>
-        {!compact ? (
-          <div className="truncate text-[0.68rem] text-muted-foreground/75">
-            Focused desktop analytics workbench
+        {compact ? (
+          <div className="flex items-baseline gap-1">
+            <span className="text-sm font-bold tracking-tight text-foreground">
+              SDM
+            </span>
+            <span className="text-[10px] font-medium text-primary/70">
+              ClickHouse
+            </span>
           </div>
-        ) : null}
+        ) : (
+          <>
+            <div className="text-[0.62rem] font-semibold uppercase tracking-[0.34em] text-primary/75">
+              SDM
+            </div>
+            <div className="truncate text-base font-semibold tracking-[-0.02em] text-foreground">
+              ClickHouse
+            </div>
+            <div className="truncate text-[0.68rem] text-muted-foreground/75">
+              Focused desktop analytics workbench
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
