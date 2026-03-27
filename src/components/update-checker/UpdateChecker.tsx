@@ -102,7 +102,12 @@ export function UpdateChecker({
           checking: false,
         }));
         if (manual) {
-          toast.error(`Update check failed: ${String(error)}`);
+          const msg = String(error);
+          if (msg.includes("403") || msg.includes("rate limit")) {
+            toast("Update check skipped — GitHub rate limit reached. Try again later.");
+          } else {
+            toast.error(`Update check failed: ${msg}`);
+          }
         }
       }
     },
