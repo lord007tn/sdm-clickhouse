@@ -2443,7 +2443,7 @@ function App() {
                 {/* Content: insights tab OR query editor + results */}
                 {isInsightsActive ? (
                   <div className="flex flex-1 flex-col overflow-y-auto">
-                    <div className="w-full space-y-3 p-3">
+                    <div className="w-full px-3 pt-2 pb-4">
                       {/* Sub-tabs row */}
                       <Tabs
                         value={insightsSubTab}
@@ -2451,41 +2451,41 @@ function App() {
                           setInsightsSubTab(v as typeof insightsSubTab)
                         }
                       >
-                        <div className="flex items-center gap-2 overflow-x-auto">
-                          <TabsList className="h-7 gap-0.5 bg-transparent p-0">
+                        <div className="mb-2 flex items-center gap-1 border-b border-border/30 pb-1.5">
+                          <TabsList className="h-6 gap-0 bg-transparent p-0">
                             <TabsTrigger
                               value="overview"
-                              className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50"
+                              className="h-5 gap-1 rounded-sm px-2 text-[9px] font-medium data-[selected]:bg-muted/40 data-[selected]:text-foreground"
                             >
-                              <BarChart3 className="h-3 w-3" />
+                              <BarChart3 className="h-2.5 w-2.5" />
                               Overview
                             </TabsTrigger>
                             <TabsTrigger
                               value="history"
-                              className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50"
+                              className="h-5 gap-1 rounded-sm px-2 text-[9px] font-medium data-[selected]:bg-muted/40 data-[selected]:text-foreground"
                             >
-                              <Clock className="h-3 w-3" />
+                              <Clock className="h-2.5 w-2.5" />
                               History
                             </TabsTrigger>
                             <TabsTrigger
                               value="snippets"
-                              className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50"
+                              className="h-5 gap-1 rounded-sm px-2 text-[9px] font-medium data-[selected]:bg-muted/40 data-[selected]:text-foreground"
                             >
-                              <Code2 className="h-3 w-3" />
+                              <Code2 className="h-2.5 w-2.5" />
                               Snippets
                             </TabsTrigger>
                             <TabsTrigger
                               value="audit"
-                              className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50"
+                              className="h-5 gap-1 rounded-sm px-2 text-[9px] font-medium data-[selected]:bg-muted/40 data-[selected]:text-foreground"
                             >
-                              <Check className="h-3 w-3" />
+                              <Check className="h-2.5 w-2.5" />
                               Audit
                             </TabsTrigger>
                             <TabsTrigger
                               value="logs"
-                              className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50"
+                              className="h-5 gap-1 rounded-sm px-2 text-[9px] font-medium data-[selected]:bg-muted/40 data-[selected]:text-foreground"
                             >
-                              <Clock className="h-3 w-3" />
+                              <Clock className="h-2.5 w-2.5" />
                               Logs
                             </TabsTrigger>
                           </TabsList>
