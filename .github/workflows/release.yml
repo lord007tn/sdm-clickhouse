@@ -99,29 +99,9 @@ jobs:
             sleep "${poll_interval_seconds}"
           done
 
-  changelog:
-    name: Generate release notes
-    needs: preflight
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Generate changelog + release notes
-        run: npx changelogithub@latest || echo "changelogithub failed, continuing with artifact publish"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   publish-tauri:
     name: Publish (${{ matrix.platform }})
-    needs: [preflight, changelog]
+    needs: preflight
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -172,7 +152,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build and publish desktop bundles
+      - name: Build and upload desktop bundles (draft release)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -181,8 +161,8 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "v__VERSION__"
-          releaseBody: "See CHANGELOG.md for detailed release notes."
-          releaseDraft: false
+          releaseBody: "Preparing release — assets uploading..."
+          releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
@@ -237,11 +217,53 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  verify-updater-manifest:
-    name: Verify latest.json
+  finalize-release:
+    name: Finalize release
     needs: publish-tauri
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Generate release notes
+        run: npx changelogithub@latest || echo "changelogithub failed, continuing"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish release (remove draft flag)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release_id="$(curl -fsSL \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/releases/tags/${TAG}" \
+            | jq -r '.id')"
+
+          if [ -z "${release_id}" ] || [ "${release_id}" = "null" ]; then
+            echo "No release found for tag ${TAG}"
+            exit 1
+          fi
+
+          echo "Publishing release ${release_id} for ${TAG}..."
+          curl -fsSL -X PATCH \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/releases/${release_id}" \
+            -d '{"draft": false}'
+
+          echo "Release ${TAG} is now published."
+
       - name: Verify latest.json exists on release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
