@@ -190,7 +190,8 @@ test("renders browser preview shell", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Add Connection" }).first(),
   ).toBeVisible();
-  await expect(page.getByText("SDM ClickHouse")).toBeVisible();
+  await expect(page.locator("aside").getByText("ClickHouse")).toBeVisible();
+  await expect(page.locator("aside").getByText("SDM")).toBeVisible();
 });
 
 test("browser preview guardrails stay interactive", async ({ page }) => {
