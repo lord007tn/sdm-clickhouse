@@ -278,7 +278,7 @@ export function ConnectionOverview({
       ) : null}
 
       {overview ? (
-        <>
+        <div className="flex flex-col gap-2">
           {/* ── Metric tiles — 2 cols on small, 4 on lg ── */}
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
             <MetricTile
@@ -307,8 +307,8 @@ export function ConnectionOverview({
             />
           </div>
 
-          {/* ── Charts row 1: Storage (wide) + Engine (narrow) ── */}
-          <div className="grid gap-2 lg:grid-cols-[1.3fr_0.7fr]">
+          {/* ── Storage chart (full width) ── */}
+          <div className="flex flex-col gap-2">
             <ChartCard
               title="Storage by database"
               subtitle="Disk footprint with row volume in tooltip."
@@ -321,7 +321,7 @@ export function ConnectionOverview({
               {storageData.length > 0 ? (
                 chartsReady ? (
                   <ChartContainer
-                    className="aspect-[2.2/1] w-full"
+                    className="aspect-[3/1] w-full"
                     config={{ value: { label: "Bytes", color: "#79D8FF" } }}
                   >
                     <AreaChart
@@ -418,7 +418,7 @@ export function ConnectionOverview({
               {engineData.length > 0 ? (
                 chartsReady ? (
                   <ChartContainer
-                    className="aspect-[1.2/1] w-full"
+                    className="aspect-[3/1] w-full"
                     config={{ value: { label: "Tables", color: "#F0B56D" } }}
                   >
                     <BarChart
@@ -454,8 +454,8 @@ export function ConnectionOverview({
             </ChartCard>
           </div>
 
-          {/* ── Charts row 2: Operational signals + Hottest tables ── */}
-          <div className="grid gap-2 lg:grid-cols-2">
+          {/* ── Operational signals + Hottest tables (stacked) ── */}
+          <div className="flex flex-col gap-2">
             {/* Operational signals */}
             <ChartCard
               title="Operational signals"
@@ -502,10 +502,10 @@ export function ConnectionOverview({
 
                 {/* Query pressure pie + legend */}
                 {queryData.length > 0 ? (
-                  <div className="grid gap-2 sm:grid-cols-[100px_1fr]">
+                  <div className="flex items-start gap-3">
                     {chartsReady ? (
                       <ChartContainer
-                        className="aspect-square w-full"
+                        className="h-20 w-20 flex-shrink-0"
                         config={{
                           value: { label: "Active queries", color: "#45f0c2" },
                         }}
@@ -531,7 +531,7 @@ export function ConnectionOverview({
                     ) : (
                       chartSkeleton("h-24")
                     )}
-                    <div className="flex flex-col justify-center gap-1">
+                    <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
                       {queryData.map((item) => (
                         <div
                           key={item.name}
@@ -586,7 +586,7 @@ export function ConnectionOverview({
               {hottestTablesData.length > 0 ? (
                 chartsReady ? (
                   <ChartContainer
-                    className="aspect-[1.6/1] w-full"
+                    className="aspect-[3/1] w-full"
                     config={{
                       value: { label: "Active parts", color: "#ff8e6e" },
                     }}
@@ -651,7 +651,7 @@ export function ConnectionOverview({
               )}
             </ChartCard>
           </div>
-        </>
+        </div>
       ) : null}
     </section>
   );
