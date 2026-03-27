@@ -2421,45 +2421,34 @@ function App() {
                 {/* Content: insights tab OR query editor + results */}
                 {isInsightsActive ? (
                   <div className="flex flex-1 flex-col overflow-y-auto">
-                    <div className="mx-auto w-full max-w-6xl space-y-4 p-4 md:p-6">
-                      {/* Sub-tabs for insights sections */}
+                    <div className="w-full space-y-3 p-3">
+                      {/* Sub-tabs row */}
                       <Tabs value={insightsSubTab} onValueChange={(v) => setInsightsSubTab(v as typeof insightsSubTab)}>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <TabsList className="h-8 gap-1 bg-transparent p-0">
-                            <TabsTrigger value="overview" className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60">
+                        <div className="flex items-center gap-2 overflow-x-auto">
+                          <TabsList className="h-7 gap-0.5 bg-transparent p-0">
+                            <TabsTrigger value="overview" className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50">
                               <BarChart3 className="h-3 w-3" />
                               Overview
                             </TabsTrigger>
-                            <TabsTrigger value="history" className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60">
+                            <TabsTrigger value="history" className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50">
                               <Clock className="h-3 w-3" />
                               History
                             </TabsTrigger>
-                            <TabsTrigger value="snippets" className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60">
+                            <TabsTrigger value="snippets" className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50">
                               <Code2 className="h-3 w-3" />
                               Snippets
                             </TabsTrigger>
-                            <TabsTrigger value="audit" className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60">
+                            <TabsTrigger value="audit" className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50">
                               <Check className="h-3 w-3" />
                               Audit
                             </TabsTrigger>
-                            <TabsTrigger value="logs" className="h-7 gap-1.5 rounded-md px-2.5 text-[11px] data-[selected]:bg-muted/60">
+                            <TabsTrigger value="logs" className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50">
                               <Clock className="h-3 w-3" />
                               Logs
                             </TabsTrigger>
                           </TabsList>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-7 gap-1.5 px-2.5 text-[11px]"
-                            disabled={!isTauriRuntime || overviewLoading}
-                            onClick={refreshActiveConnectionData}
-                          >
-                            {overviewLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                            Refresh
-                          </Button>
                         </div>
-                        <TabsContent value="overview" className="mt-3">
+                        <TabsContent value="overview" className="mt-2">
                           <ConnectionOverview
                             overview={overview}
                             loading={overviewLoading}
@@ -2468,13 +2457,13 @@ function App() {
                             onRefresh={refreshActiveConnectionData}
                           />
                         </TabsContent>
-                        <TabsContent value="history" className="mt-3">
-                          <div className="rounded-lg border border-border/40">
+                        <TabsContent value="history" className="mt-2">
+                          <div className="overflow-hidden rounded-lg border border-border/40">
                             {historySql.length > 0 ? (
                               historySql.map((sql, idx) => (
                                 <button
                                   key={`${idx}-${sql}`}
-                                  className="mono mb-0.5 block w-full truncate px-3 py-2 text-left text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                  className="mono block w-full truncate border-b border-border/20 px-3 py-2 text-left text-[11px] text-muted-foreground transition-colors last:border-0 hover:bg-muted/40 hover:text-foreground"
                                   onClick={() => {
                                     if (activeTab) updateTab(activeTab.id, { sql });
                                     setActiveTabId(activeTab?.id);
@@ -2489,11 +2478,11 @@ function App() {
                             )}
                           </div>
                         </TabsContent>
-                        <TabsContent value="snippets" className="mt-3">
-                          <div className="rounded-lg border border-border/40">
+                        <TabsContent value="snippets" className="mt-2">
+                          <div className="overflow-hidden rounded-lg border border-border/40">
                             {snippets.length > 0 ? (
                               snippets.map((snippet) => (
-                                <div key={snippet.id} className="group flex items-center gap-2 px-3 py-2 hover:bg-muted/50">
+                                <div key={snippet.id} className="group flex items-center gap-2 border-b border-border/20 px-3 py-2 last:border-0 hover:bg-muted/40">
                                   <button
                                     className="mono min-w-0 flex-1 truncate text-left text-[11px] text-muted-foreground hover:text-foreground"
                                     onClick={() => {
@@ -2525,11 +2514,11 @@ function App() {
                             )}
                           </div>
                         </TabsContent>
-                        <TabsContent value="audit" className="mt-3">
-                          <div className="rounded-lg border border-border/40">
+                        <TabsContent value="audit" className="mt-2">
+                          <div className="overflow-hidden rounded-lg border border-border/40">
                             {auditItems.length > 0 ? (
                               auditItems.map((item) => (
-                                <div key={item.id} className="px-3 py-2 text-[11px] text-muted-foreground hover:bg-muted/40" title={item.payloadJson ?? ""}>
+                                <div key={item.id} className="border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground last:border-0 hover:bg-muted/30" title={item.payloadJson ?? ""}>
                                   <div className="truncate font-medium text-foreground/80">{item.action} · {item.target}</div>
                                   <div className="truncate text-[10px]">{item.createdAt}</div>
                                 </div>
@@ -2539,11 +2528,11 @@ function App() {
                             )}
                           </div>
                         </TabsContent>
-                        <TabsContent value="logs" className="mt-3">
-                          <div className="rounded-lg border border-border/40">
+                        <TabsContent value="logs" className="mt-2">
+                          <div className="overflow-hidden rounded-lg border border-border/40">
                             {appLogs.length > 0 ? (
                               appLogs.map((item) => (
-                                <div key={item.id} className="px-3 py-2 text-[11px] text-muted-foreground hover:bg-muted/40" title={item.contextJson ?? ""}>
+                                <div key={item.id} className="border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground last:border-0 hover:bg-muted/30" title={item.contextJson ?? ""}>
                                   <div className="truncate font-medium text-foreground/80">[{item.level}] {item.category}</div>
                                   <div className="truncate text-[10px]">{item.message}</div>
                                 </div>
