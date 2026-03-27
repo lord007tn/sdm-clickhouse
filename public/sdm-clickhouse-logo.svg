@@ -1,0 +1,36 @@
+<svg width="720" height="220" viewBox="0 0 720 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoBg" x1="26" y1="18" x2="194" y2="202" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#16344C"/>
+      <stop offset="1" stop-color="#081521"/>
+    </linearGradient>
+    <linearGradient id="logoBeam" x1="62" y1="50" x2="166" y2="162" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#79D8FF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#2FA6DE" stop-opacity="0.18"/>
+    </linearGradient>
+    <linearGradient id="logoLeft" x1="58" y1="60" x2="103" y2="154" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8DE3FF"/>
+      <stop offset="1" stop-color="#2FA6DE"/>
+    </linearGradient>
+    <linearGradient id="logoMid" x1="98" y1="44" x2="145" y2="172" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C7F4FF"/>
+      <stop offset="1" stop-color="#4FC4F4"/>
+    </linearGradient>
+    <linearGradient id="logoRight" x1="138" y1="78" x2="188" y2="152" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5C174"/>
+      <stop offset="1" stop-color="#CC8444"/>
+    </linearGradient>
+  </defs>
+  <rect x="18" y="18" width="184" height="184" rx="44" fill="url(#logoBg)"/>
+  <rect x="26" y="26" width="168" height="168" rx="36" stroke="#C6EAFF" stroke-opacity="0.14" stroke-width="2"/>
+  <ellipse cx="86" cy="60" rx="74" ry="42" fill="url(#logoBeam)" opacity="0.28"/>
+  <path d="M58 153V97.1905C58 93.7569 59.4306 90.4785 61.9503 88.2127L80.9503 71.1188C83.139 69.1493 85.9792 68.0596 88.9233 68.0596H96C100.418 68.0596 104 71.6413 104 76.0596V145C104 151.627 98.6274 157 92 157H62C59.7909 157 58 155.209 58 153Z" fill="url(#logoLeft)"/>
+  <path d="M97 162V81.5528C97 78.6245 98.2349 75.832 100.401 73.9343L116.401 59.9196C118.592 58.0007 121.405 56.9414 124.318 56.9414H132C136.418 56.9414 140 60.5231 140 64.9414V151C140 158.18 134.18 164 127 164H99C97.8954 164 97 163.105 97 162Z" fill="url(#logoMid)"/>
+  <path d="M135 144V108.744C135 106.159 136.003 103.675 137.798 101.817L154.798 84.2245C156.685 82.272 159.283 81.1689 161.999 81.1689H170C174.418 81.1689 178 84.7506 178 89.1689V138C178 144.627 172.627 150 166 150H141C137.686 150 135 147.314 135 144Z" fill="url(#logoRight)"/>
+  <path d="M62 160C80.9348 144.159 101.099 136.239 122.493 136.239C138.809 136.239 157.312 141.063 178 150.712" stroke="url(#logoBeam)" stroke-width="8" stroke-linecap="round" opacity="0.6"/>
+  <circle cx="170" cy="82" r="10" fill="#E2A45E"/>
+  <circle cx="170" cy="82" r="5.6" fill="#FFF4E6"/>
+  <text x="244" y="79" fill="#7ECFF4" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif" font-size="26" font-weight="600" letter-spacing="7">SDM</text>
+  <text x="244" y="132" fill="#EFF8FF" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif" font-size="56" font-weight="700" letter-spacing="-1.6">ClickHouse</text>
+  <text x="244" y="168" fill="#B5CADC" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif" font-size="20" font-weight="500" letter-spacing="1.2">Desktop analytics workbench for focused database operations</text>
+</svg>

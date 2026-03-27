@@ -1,0 +1,40 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="28" y1="20" x2="220" y2="234" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#16344C"/>
+      <stop offset="1" stop-color="#081521"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="68" y1="56" x2="188" y2="190" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#79D8FF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#2FA6DE" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="leftShard" x1="62" y1="64" x2="111" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8DE3FF"/>
+      <stop offset="1" stop-color="#2FA6DE"/>
+    </linearGradient>
+    <linearGradient id="midShard" x1="105" y1="44" x2="156" y2="200" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C7F4FF"/>
+      <stop offset="1" stop-color="#4FC4F4"/>
+    </linearGradient>
+    <linearGradient id="rightShard" x1="151" y1="86" x2="204" y2="176" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5C174"/>
+      <stop offset="1" stop-color="#CC8444"/>
+    </linearGradient>
+    <filter id="glow" x="24" y="24" width="208" height="208" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="10" result="effect1_foregroundBlur"/>
+    </filter>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="56" fill="url(#bg)"/>
+  <rect x="24" y="24" width="208" height="208" rx="48" stroke="rgba(198,234,255,0.14)" stroke-width="2"/>
+  <ellipse cx="88" cy="64" rx="84" ry="56" fill="url(#beam)" opacity="0.28"/>
+  <g filter="url(#glow)">
+    <path d="M62 178V105.448C62 101.222 63.7828 97.1911 66.9116 94.3495L91.9116 71.6386C94.1254 69.6277 97.0082 68.5127 100 68.5127H108C112.418 68.5127 116 72.0944 116 76.5127V170C116 176.627 110.627 182 104 182H66C63.7909 182 62 180.209 62 178Z" fill="url(#leftShard)"/>
+    <path d="M104 189V83.882C104 80.4351 105.422 77.1405 107.932 74.8767L128.932 55.9326C131.129 53.9508 133.983 52.8545 136.942 52.8545H146C150.418 52.8545 154 56.4362 154 60.8545V177C154 184.18 148.18 190 141 190H105C104.448 190 104 189.552 104 189Z" fill="url(#midShard)"/>
+    <path d="M147 166V117.701C147 114.869 148.129 112.154 150.137 110.151L173.137 87.2133C175.135 85.2211 177.841 84.1016 180.663 84.1016H188C192.418 84.1016 196 87.6833 196 92.1016V159C196 165.627 190.627 171 184 171H152C149.239 171 147 168.761 147 166Z" fill="url(#rightShard)"/>
+  </g>
+  <path d="M67 184C89.9559 164.523 113.962 154.784 139.018 154.784C157.697 154.784 176.691 160.247 196 171.173" stroke="url(#beam)" stroke-width="10" stroke-linecap="round" opacity="0.58"/>
+  <circle cx="188" cy="84" r="14" fill="#E2A45E"/>
+  <circle cx="188" cy="84" r="8" fill="#FFF4E6"/>
+</svg>

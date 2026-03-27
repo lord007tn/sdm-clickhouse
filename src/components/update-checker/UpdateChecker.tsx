@@ -282,7 +282,7 @@ export function UpdateChecker({
           v{appVersion}
         </span>
         {updater.done ? (
-          <span className="text-[10px] font-medium text-emerald-400">
+          <span className="text-[10px] font-medium text-primary">
             Installer launched
           </span>
         ) : updater.installing ? (

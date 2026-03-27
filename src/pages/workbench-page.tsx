@@ -50,6 +50,7 @@ import {
 } from "@/features/query/lib/sql";
 import { UpdateChecker } from "@/components/update-checker/UpdateChecker";
 import { ConnectionOverview } from "@/components/insights/ConnectionOverview";
+import { BrandLogo, BrandMark } from "@/components/branding/BrandLogo";
 import { QueryEditor } from "@/features/query/components/QueryEditor";
 import { ConnectionDialogPage } from "@/pages/connection-dialog-page";
 import {
@@ -272,7 +273,9 @@ function App() {
   const [overview, setOverview] = useState<ClickHouseOverview | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState<string | null>(null);
-  const [insightsSubTab, setInsightsSubTab] = useState<"overview" | "history" | "snippets" | "audit" | "logs">("overview");
+  const [insightsSubTab, setInsightsSubTab] = useState<
+    "overview" | "history" | "snippets" | "audit" | "logs"
+  >("overview");
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [opsDialogOpen, setOpsDialogOpen] = useState(false);
   const [opsDraft, setOpsDraft] = useState<OpsDraft>(baseOpsDraft);
@@ -459,7 +462,10 @@ function App() {
     [selectedTableColumns],
   );
 
-  const handleRowClick = (idx: number, e: React.MouseEvent | React.KeyboardEvent) => {
+  const handleRowClick = (
+    idx: number,
+    e: React.MouseEvent | React.KeyboardEvent,
+  ) => {
     const isCtrl = e.ctrlKey || e.metaKey;
     const isShift = e.shiftKey;
 
@@ -468,7 +474,7 @@ function App() {
       const start = Math.min(lastClickedRowRef.current, idx);
       const end = Math.max(lastClickedRowRef.current, idx);
       setSelectedRowIdxs((prev) => {
-        const next = new Set(isCtrl ? prev : [] as number[]);
+        const next = new Set(isCtrl ? prev : ([] as number[]));
         for (let i = start; i <= end; i++) next.add(i);
         return next;
       });
@@ -575,7 +581,7 @@ function App() {
                       "line-through text-muted-foreground/40 decoration-destructive/60",
                     !isPendingDelete &&
                       pendingEdit !== undefined &&
-                      "bg-amber-500/8 text-amber-200",
+                      "bg-accent/12 text-accent",
                   )}
                   onDoubleClick={(e) => {
                     if (isPendingDelete) return;
@@ -903,9 +909,7 @@ function App() {
           target.tagName === "TEXTAREA";
         if (!isInEditor && resultTableRows.length > 0) {
           e.preventDefault();
-          setSelectedRowIdxs(
-            new Set(resultTableRows.map((row) => row.index)),
-          );
+          setSelectedRowIdxs(new Set(resultTableRows.map((row) => row.index)));
         }
       }
       // Delete key → mark selected rows for deletion
@@ -923,7 +927,13 @@ function App() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingCell, selectedRowIdxs, hasPendingChanges, applyingChanges, resultTableRows]);
+  }, [
+    editingCell,
+    selectedRowIdxs,
+    hasPendingChanges,
+    applyingChanges,
+    resultTableRows,
+  ]);
 
   /* ── Tab / query helpers ── */
   const updateTab = (id: string, patch: Partial<QueryTab>) =>
@@ -1490,7 +1500,12 @@ function App() {
 
   /** Bulk set a column value for all selected rows as pending edits. */
   const bulkSetColumnValue = () => {
-    if (selectedRowIdxs.size === 0 || !bulkEditColumn.trim() || !activeTab?.result) return;
+    if (
+      selectedRowIdxs.size === 0 ||
+      !bulkEditColumn.trim() ||
+      !activeTab?.result
+    )
+      return;
     const col = bulkEditColumn.trim();
     setPendingEdits((prev) => {
       const next = new Map(prev);
@@ -1532,11 +1547,14 @@ function App() {
       .map((idx) => activeTab.result!.rows[idx])
       .filter(Boolean);
     navigator.clipboard.writeText(JSON.stringify(rows, null, 2));
-    toast.success(`${rows.length} row${rows.length > 1 ? "s" : ""} copied as JSON`);
+    toast.success(
+      `${rows.length} row${rows.length > 1 ? "s" : ""} copied as JSON`,
+    );
   };
 
   /** Check if all selected rows are already marked for deletion. */
-  const allSelectedMarkedForDelete = selectedRowIdxs.size > 0 &&
+  const allSelectedMarkedForDelete =
+    selectedRowIdxs.size > 0 &&
     Array.from(selectedRowIdxs).every((idx) => pendingDeletes.has(idx));
 
   /** Apply all pending edits and deletes to the server. */
@@ -1646,14 +1664,7 @@ function App() {
       <aside className="flex w-[280px] flex-shrink-0 flex-col border-r border-border/50">
         {/* Header */}
         <div className="flex h-12 items-center justify-between border-b border-border/50 px-4">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15">
-              <Database className="h-3.5 w-3.5 text-primary" />
-            </div>
-            <span className="text-sm font-semibold tracking-tight">
-              SDM ClickHouse
-            </span>
-          </div>
+          <BrandLogo compact />
           <Button
             size="icon"
             variant="ghost"
@@ -1788,8 +1799,8 @@ function App() {
                         <div
                           className={cn(
                             "truncate text-[10px]",
-                            health?.state === "ok" && "text-emerald-300",
-                            health?.state === "checking" && "text-amber-300",
+                            health?.state === "ok" && "text-primary/85",
+                            health?.state === "checking" && "text-accent/85",
                             health?.state === "error" && "text-destructive",
                           )}
                           title={health?.detail}
@@ -1913,7 +1924,7 @@ function App() {
                         ) : (
                           <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                         )}
-                        <Database className="h-3 w-3 flex-shrink-0 text-amber-500/80" />
+                        <Database className="h-3 w-3 flex-shrink-0 text-accent/85" />
                         <span className="truncate">{database}</span>
                       </button>
                       {expandedDb[database] && (
@@ -2084,16 +2095,16 @@ function App() {
       {/* ── Main ── */}
       <main className="flex flex-1 flex-col overflow-hidden">
         {!isTauriRuntime && (
-          <div className="border-b border-amber-400/20 bg-amber-500/5 px-4 py-2 text-xs text-amber-200/80">
+          <div className="border-b border-accent/20 bg-accent/8 px-4 py-2 text-xs text-accent/85">
             Browser preview mode. Run with{" "}
-            <code className="mono rounded bg-amber-500/10 px-1 py-0.5">
+            <code className="mono rounded bg-accent/12 px-1 py-0.5">
               pnpm tauri dev
             </code>{" "}
             for full functionality.
           </div>
         )}
         {startupNotice ? (
-          <div className="border-b border-amber-400/20 bg-amber-500/5 px-4 py-2 text-xs text-amber-200/90">
+          <div className="border-b border-accent/20 bg-accent/8 px-4 py-2 text-xs text-accent/90">
             {startupNotice}
           </div>
         ) : null}
@@ -2108,24 +2119,32 @@ function App() {
             </div>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-5">
-              <Card className="border-border/50 bg-muted/10">
+              <Card className="border-border/60 bg-card/55 shadow-[0_24px_80px_rgba(6,18,29,0.4)]">
                 <CardContent className="flex flex-col items-center gap-5 p-8 text-center">
-                  <div className="rounded-2xl bg-muted/20 p-7">
+                  <div className="rounded-[1.75rem] border border-border/60 bg-background/75 p-5 shadow-[0_16px_44px_rgba(47,166,222,0.16)]">
                     {connections.length === 0 ? (
-                      <Database className="h-14 w-14 text-muted-foreground/20" />
+                      <BrandMark className="size-16" />
                     ) : (
-                      <Server className="h-14 w-14 text-muted-foreground/20" />
+                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/20">
+                        <Server className="h-8 w-8 text-primary/70" />
+                      </div>
                     )}
                   </div>
                   <div className="text-center">
-                    <h2 className="text-lg font-medium text-foreground/70">
+                    {connections.length === 0 ? (
+                      <BrandLogo
+                        className="justify-center"
+                        markClassName="hidden"
+                      />
+                    ) : null}
+                    <h2 className="mt-3 text-lg font-medium text-foreground/78">
                       {connections.length === 0
                         ? "No Connections"
                         : "Select a Connection"}
                     </h2>
                     <p className="mt-1 max-w-[280px] text-sm text-muted-foreground/50">
                       {connections.length === 0
-                        ? "Add a ClickHouse connection to get started"
+                        ? "Add a ClickHouse connection to start querying with the SDM desktop workbench"
                         : "Choose a connection from the sidebar to start querying"}
                     </p>
                   </div>
@@ -2160,7 +2179,7 @@ function App() {
                 {activeTab?.running ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Play className="h-3.5 w-3.5 text-emerald-400" />
+                  <Play className="h-3.5 w-3.5 text-primary" />
                 )}
                 Run
               </Button>
@@ -2171,7 +2190,7 @@ function App() {
                 onClick={() => void cancelQuery()}
                 disabled={!isTauriRuntime || !activeTab?.runningQueryId}
               >
-                <X className="h-3.5 w-3.5 text-amber-300" />
+                <X className="h-3.5 w-3.5 text-accent" />
                 Cancel
               </Button>
               <Button
@@ -2262,7 +2281,7 @@ function App() {
                       className={cn(
                         "rounded-full border px-2 py-0.5 text-[10px]",
                         overview && overview.activeQueryCount > 0
-                          ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                          ? "border-accent/40 bg-accent/12 text-accent"
                           : "border-border/60 bg-background/70 text-muted-foreground",
                       )}
                     >
@@ -2270,7 +2289,10 @@ function App() {
                       {overview ? `${overview.activeQueryCount} active` : "..."}
                     </Badge>
                     {overviewError ? (
-                      <span className="text-[10px] text-amber-400" title={overviewError}>
+                      <span
+                        className="text-[10px] text-accent"
+                        title={overviewError}
+                      >
                         Insights unavailable
                       </span>
                     ) : null}
@@ -2423,26 +2445,46 @@ function App() {
                   <div className="flex flex-1 flex-col overflow-y-auto">
                     <div className="w-full space-y-3 p-3">
                       {/* Sub-tabs row */}
-                      <Tabs value={insightsSubTab} onValueChange={(v) => setInsightsSubTab(v as typeof insightsSubTab)}>
+                      <Tabs
+                        value={insightsSubTab}
+                        onValueChange={(v) =>
+                          setInsightsSubTab(v as typeof insightsSubTab)
+                        }
+                      >
                         <div className="flex items-center gap-2 overflow-x-auto">
                           <TabsList className="h-7 gap-0.5 bg-transparent p-0">
-                            <TabsTrigger value="overview" className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50">
+                            <TabsTrigger
+                              value="overview"
+                              className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50"
+                            >
                               <BarChart3 className="h-3 w-3" />
                               Overview
                             </TabsTrigger>
-                            <TabsTrigger value="history" className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50">
+                            <TabsTrigger
+                              value="history"
+                              className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50"
+                            >
                               <Clock className="h-3 w-3" />
                               History
                             </TabsTrigger>
-                            <TabsTrigger value="snippets" className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50">
+                            <TabsTrigger
+                              value="snippets"
+                              className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50"
+                            >
                               <Code2 className="h-3 w-3" />
                               Snippets
                             </TabsTrigger>
-                            <TabsTrigger value="audit" className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50">
+                            <TabsTrigger
+                              value="audit"
+                              className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50"
+                            >
                               <Check className="h-3 w-3" />
                               Audit
                             </TabsTrigger>
-                            <TabsTrigger value="logs" className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50">
+                            <TabsTrigger
+                              value="logs"
+                              className="h-6 gap-1 rounded-md px-2 text-[10px] data-[selected]:bg-muted/50"
+                            >
                               <Clock className="h-3 w-3" />
                               Logs
                             </TabsTrigger>
@@ -2465,7 +2507,8 @@ function App() {
                                   key={`${idx}-${sql}`}
                                   className="mono block w-full truncate border-b border-border/20 px-3 py-2 text-left text-[11px] text-muted-foreground transition-colors last:border-0 hover:bg-muted/40 hover:text-foreground"
                                   onClick={() => {
-                                    if (activeTab) updateTab(activeTab.id, { sql });
+                                    if (activeTab)
+                                      updateTab(activeTab.id, { sql });
                                     setActiveTabId(activeTab?.id);
                                   }}
                                   title={sql}
@@ -2474,7 +2517,9 @@ function App() {
                                 </button>
                               ))
                             ) : (
-                              <p className="py-8 text-center text-[11px] text-muted-foreground/40">No query history</p>
+                              <p className="py-8 text-center text-[11px] text-muted-foreground/40">
+                                No query history
+                              </p>
                             )}
                           </div>
                         </TabsContent>
@@ -2482,11 +2527,17 @@ function App() {
                           <div className="overflow-hidden rounded-lg border border-border/40">
                             {snippets.length > 0 ? (
                               snippets.map((snippet) => (
-                                <div key={snippet.id} className="group flex items-center gap-2 border-b border-border/20 px-3 py-2 last:border-0 hover:bg-muted/40">
+                                <div
+                                  key={snippet.id}
+                                  className="group flex items-center gap-2 border-b border-border/20 px-3 py-2 last:border-0 hover:bg-muted/40"
+                                >
                                   <button
                                     className="mono min-w-0 flex-1 truncate text-left text-[11px] text-muted-foreground hover:text-foreground"
                                     onClick={() => {
-                                      if (activeTab) updateTab(activeTab.id, { sql: snippet.sql });
+                                      if (activeTab)
+                                        updateTab(activeTab.id, {
+                                          sql: snippet.sql,
+                                        });
                                       setActiveTabId(activeTab?.id);
                                     }}
                                     title={snippet.sql}
@@ -2499,7 +2550,9 @@ function App() {
                                     onClick={async () => {
                                       try {
                                         await api.snippetDelete(snippet.id);
-                                        void loadWorkspace().catch((error) => toast.error(String(error)));
+                                        void loadWorkspace().catch((error) =>
+                                          toast.error(String(error)),
+                                        );
                                       } catch (error) {
                                         toast.error(String(error));
                                       }
@@ -2510,7 +2563,9 @@ function App() {
                                 </div>
                               ))
                             ) : (
-                              <p className="py-8 text-center text-[11px] text-muted-foreground/40">No saved snippets</p>
+                              <p className="py-8 text-center text-[11px] text-muted-foreground/40">
+                                No saved snippets
+                              </p>
                             )}
                           </div>
                         </TabsContent>
@@ -2518,13 +2573,23 @@ function App() {
                           <div className="overflow-hidden rounded-lg border border-border/40">
                             {auditItems.length > 0 ? (
                               auditItems.map((item) => (
-                                <div key={item.id} className="border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground last:border-0 hover:bg-muted/30" title={item.payloadJson ?? ""}>
-                                  <div className="truncate font-medium text-foreground/80">{item.action} · {item.target}</div>
-                                  <div className="truncate text-[10px]">{item.createdAt}</div>
+                                <div
+                                  key={item.id}
+                                  className="border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground last:border-0 hover:bg-muted/30"
+                                  title={item.payloadJson ?? ""}
+                                >
+                                  <div className="truncate font-medium text-foreground/80">
+                                    {item.action} · {item.target}
+                                  </div>
+                                  <div className="truncate text-[10px]">
+                                    {item.createdAt}
+                                  </div>
                                 </div>
                               ))
                             ) : (
-                              <p className="py-8 text-center text-[11px] text-muted-foreground/40">No audit records</p>
+                              <p className="py-8 text-center text-[11px] text-muted-foreground/40">
+                                No audit records
+                              </p>
                             )}
                           </div>
                         </TabsContent>
@@ -2532,13 +2597,23 @@ function App() {
                           <div className="overflow-hidden rounded-lg border border-border/40">
                             {appLogs.length > 0 ? (
                               appLogs.map((item) => (
-                                <div key={item.id} className="border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground last:border-0 hover:bg-muted/30" title={item.contextJson ?? ""}>
-                                  <div className="truncate font-medium text-foreground/80">[{item.level}] {item.category}</div>
-                                  <div className="truncate text-[10px]">{item.message}</div>
+                                <div
+                                  key={item.id}
+                                  className="border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground last:border-0 hover:bg-muted/30"
+                                  title={item.contextJson ?? ""}
+                                >
+                                  <div className="truncate font-medium text-foreground/80">
+                                    [{item.level}] {item.category}
+                                  </div>
+                                  <div className="truncate text-[10px]">
+                                    {item.message}
+                                  </div>
                                 </div>
                               ))
                             ) : (
-                              <p className="py-8 text-center text-[11px] text-muted-foreground/40">No app logs</p>
+                              <p className="py-8 text-center text-[11px] text-muted-foreground/40">
+                                No app logs
+                              </p>
                             )}
                           </div>
                         </TabsContent>
@@ -2546,364 +2621,382 @@ function App() {
                     </div>
                   </div>
                 ) : (
-                <div className="flex flex-1 flex-col overflow-hidden">
-                  {/* SQL editor */}
-                  <div className="flex-shrink-0 border-b border-border/50 p-3">
-                    <QueryEditor
-                      value={activeTab?.sql ?? ""}
-                      onChange={(value) => {
-                        if (!activeTab) return;
-                        updateTab(activeTab.id, { sql: value });
-                      }}
-                      onRunQuery={() => void runQuery()}
-                      databases={databases}
-                      tables={queryCompletionTables}
-                      selectedTable={selectedTable}
-                      selectedTableColumns={queryCompletionColumns}
-                    />
-                    <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground">
-                      <span>Page {activeTab?.page ?? 1}</span>
-                      <span>Timeout</span>
-                      <Input
-                        className="h-5 w-24 border-border/50 text-[10px]"
-                        type="number"
-                        value={activeTab?.timeoutMs ?? 30000}
-                        onChange={(e) => {
-                          const value = Number(e.currentTarget.value) || 30000;
+                  <div className="flex flex-1 flex-col overflow-hidden">
+                    {/* SQL editor */}
+                    <div className="flex-shrink-0 border-b border-border/50 p-3">
+                      <QueryEditor
+                        value={activeTab?.sql ?? ""}
+                        onChange={(value) => {
                           if (!activeTab) return;
-                          updateTab(activeTab.id, { timeoutMs: value });
+                          updateTab(activeTab.id, { sql: value });
                         }}
+                        onRunQuery={() => void runQuery()}
+                        databases={databases}
+                        tables={queryCompletionTables}
+                        selectedTable={selectedTable}
+                        selectedTableColumns={queryCompletionColumns}
                       />
-                      <button
-                        className="rounded px-1.5 py-0.5 hover:bg-muted/60 hover:text-foreground"
-                        onClick={() =>
-                          void runQuery(Math.max(1, (activeTab?.page ?? 1) - 1))
-                        }
-                      >
-                        &larr; Prev
-                      </button>
-                      <button
-                        className="rounded px-1.5 py-0.5 hover:bg-muted/60 hover:text-foreground"
-                        onClick={() =>
-                          void runQuery((activeTab?.page ?? 1) + 1)
-                        }
-                      >
-                        Next &rarr;
-                      </button>
-                      {activeTab?.result && (
-                        <span className="ml-auto">
-                          {activeTab.result.rowCount} rows &middot;{" "}
-                          {activeTab.result.durationMs}ms
-                        </span>
-                      )}
-                      {activeTab?.error && (
-                        <span
-                          className="ml-auto max-w-[400px] truncate text-destructive"
-                          title={activeTab.error}
+                      <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+                        <span>Page {activeTab?.page ?? 1}</span>
+                        <span>Timeout</span>
+                        <Input
+                          className="h-5 w-24 border-border/50 text-[10px]"
+                          type="number"
+                          value={activeTab?.timeoutMs ?? 30000}
+                          onChange={(e) => {
+                            const value =
+                              Number(e.currentTarget.value) || 30000;
+                            if (!activeTab) return;
+                            updateTab(activeTab.id, { timeoutMs: value });
+                          }}
+                        />
+                        <button
+                          className="rounded px-1.5 py-0.5 hover:bg-muted/60 hover:text-foreground"
+                          onClick={() =>
+                            void runQuery(
+                              Math.max(1, (activeTab?.page ?? 1) - 1),
+                            )
+                          }
                         >
-                          {activeTab.error}
-                        </span>
-                      )}
+                          &larr; Prev
+                        </button>
+                        <button
+                          className="rounded px-1.5 py-0.5 hover:bg-muted/60 hover:text-foreground"
+                          onClick={() =>
+                            void runQuery((activeTab?.page ?? 1) + 1)
+                          }
+                        >
+                          Next &rarr;
+                        </button>
+                        {activeTab?.result && (
+                          <span className="ml-auto">
+                            {activeTab.result.rowCount} rows &middot;{" "}
+                            {activeTab.result.durationMs}ms
+                          </span>
+                        )}
+                        {activeTab?.error && (
+                          <span
+                            className="ml-auto max-w-[400px] truncate text-destructive"
+                            title={activeTab.error}
+                          >
+                            {activeTab.error}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Selection + pending changes bar */}
-                  {(hasPendingChanges || hasSelection) && (
-                    <div className="flex items-center gap-2 border-b border-border/40 bg-card/80 px-3 py-1.5">
-                      {/* Left: selection info + bulk actions */}
-                      {hasSelection && (
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant="secondary"
-                            className="h-5 gap-1 bg-primary/10 px-1.5 text-[10px] text-primary"
-                          >
-                            <CheckSquare className="h-2.5 w-2.5" />
-                            {selectedRowIdxs.size} selected
-                          </Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 gap-1 px-2 text-[11px]"
-                            onClick={copySelectedAsJson}
-                          >
-                            <Copy className="h-3 w-3" />
-                            Copy
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 gap-1 px-2 text-[11px] text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
-                            onClick={openBulkEdit}
-                          >
-                            <Edit3 className="h-3 w-3" />
-                            Edit{selectedRowIdxs.size > 1 ? ` (${selectedRowIdxs.size})` : ""}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={cn(
-                              "h-6 gap-1 px-2 text-[11px]",
-                              allSelectedMarkedForDelete
-                                ? "text-muted-foreground"
-                                : "text-destructive hover:bg-destructive/10 hover:text-destructive",
-                            )}
-                            onClick={() => {
-                              if (allSelectedMarkedForDelete) bulkUnmarkDelete();
-                              else bulkMarkDelete();
-                            }}
-                          >
-                            {allSelectedMarkedForDelete ? (
-                              <>
-                                <Undo2 className="h-3 w-3" />
-                                Unmark
-                              </>
-                            ) : (
-                              <>
-                                <Trash2 className="h-3 w-3" />
-                                Delete{selectedRowIdxs.size > 1 ? ` (${selectedRowIdxs.size})` : ""}
-                              </>
-                            )}
-                          </Button>
-                          <div className="h-4 w-px bg-border/40" />
-                        </div>
-                      )}
-
-                      {/* Center: pending changes summary */}
-                      {hasPendingChanges && (
-                        <div className="flex items-center gap-1.5">
-                          {pendingEdits.size > 0 && (
+                    {/* Selection + pending changes bar */}
+                    {(hasPendingChanges || hasSelection) && (
+                      <div className="flex items-center gap-2 border-b border-border/40 bg-card/80 px-3 py-1.5">
+                        {/* Left: selection info + bulk actions */}
+                        {hasSelection && (
+                          <div className="flex items-center gap-2">
                             <Badge
                               variant="secondary"
-                              className="h-5 gap-1 bg-amber-500/10 px-1.5 text-[10px] text-amber-400"
+                              className="h-5 gap-1 bg-primary/10 px-1.5 text-[10px] text-primary"
                             >
-                              <Pencil className="h-2.5 w-2.5" />
-                              {pendingEdits.size} edit
-                              {pendingEdits.size > 1 ? "s" : ""}
+                              <CheckSquare className="h-2.5 w-2.5" />
+                              {selectedRowIdxs.size} selected
                             </Badge>
-                          )}
-                          {pendingDeletes.size > 0 && (
-                            <Badge
-                              variant="secondary"
-                              className="h-5 gap-1 bg-destructive/10 px-1.5 text-[10px] text-destructive"
-                            >
-                              <Trash2 className="h-2.5 w-2.5" />
-                              {pendingDeletes.size} deletion
-                              {pendingDeletes.size > 1 ? "s" : ""}
-                            </Badge>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Right: apply / discard / dismiss */}
-                      <div className="ml-auto flex items-center gap-1">
-                        {hasPendingChanges && (
-                          <>
                             <Button
+                              variant="ghost"
                               size="sm"
-                              className="h-6 gap-1 bg-emerald-600 px-2.5 text-[11px] text-white hover:bg-emerald-500"
-                              onClick={() => void applyChanges()}
-                              disabled={applyingChanges}
+                              className="h-6 gap-1 px-2 text-[11px]"
+                              onClick={copySelectedAsJson}
                             >
-                              {applyingChanges ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Check className="h-3 w-3" />
-                              )}
-                              Apply
+                              <Copy className="h-3 w-3" />
+                              Copy
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 gap-1 px-2 text-[11px] text-muted-foreground"
-                              onClick={discardChanges}
-                              disabled={applyingChanges}
+                              className="h-6 gap-1 px-2 text-[11px] text-accent hover:bg-accent/12 hover:text-accent"
+                              onClick={openBulkEdit}
                             >
-                              <Undo2 className="h-3 w-3" />
-                              Discard
+                              <Edit3 className="h-3 w-3" />
+                              Edit
+                              {selectedRowIdxs.size > 1
+                                ? ` (${selectedRowIdxs.size})`
+                                : ""}
                             </Button>
-                          </>
-                        )}
-                        {!hasPendingChanges && hasSelection && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-1.5 text-muted-foreground"
-                            onClick={() => {
-                              setSelectedRowIdxs(new Set());
-                              lastClickedRowRef.current = null;
-                            }}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Results table */}
-                  {activeTab?.result?.columns?.length ? (
-                    <div className="border-b border-border/50 bg-background/80 px-3 py-2 backdrop-blur">
-                      <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
-                        <div className="relative min-w-0 flex-1">
-                          <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                          <Input
-                            value={resultFilter}
-                            onChange={(event) =>
-                              setResultFilter(event.currentTarget.value)
-                            }
-                            placeholder="Filter rows across the visible result set"
-                            className="h-8 border-border/70 bg-muted/30 pr-9 pl-8 text-xs"
-                            data-testid="results-filter-input"
-                            aria-label="Filter result rows"
-                          />
-                          {activeResultFilter ? (
-                            <button
-                              type="button"
-                              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-                              onClick={() => setResultFilter("")}
-                              aria-label="Clear result filter"
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={cn(
+                                "h-6 gap-1 px-2 text-[11px]",
+                                allSelectedMarkedForDelete
+                                  ? "text-muted-foreground"
+                                  : "text-destructive hover:bg-destructive/10 hover:text-destructive",
+                              )}
+                              onClick={() => {
+                                if (allSelectedMarkedForDelete)
+                                  bulkUnmarkDelete();
+                                else bulkMarkDelete();
+                              }}
                             >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          ) : null}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                          <Badge
-                            variant="secondary"
-                            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-1 font-medium text-foreground"
-                            data-testid="results-count-badge"
-                          >
-                            {visibleResultCount} / {totalResultCount} rows
-                          </Badge>
-                          <div className="flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-muted-foreground">
-                            <Sparkles className="h-3 w-3" />
-                            <span data-testid="results-sort-summary">
-                              {primaryResultSort
-                                ? `${primaryResultSort.id} ${primaryResultSort.desc ? "desc" : "asc"}`
-                                : "Natural order"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div
-                    ref={resultContainerRef}
-                    className="flex-1 overflow-auto"
-                  >
-                    {activeTab?.running ? (
-                      <div className="p-3">
-                        <div className="space-y-1">
-                          {Array.from({ length: 8 }).map((_, i) => (
-                            <Skeleton
-                              key={i}
-                              className="h-7 w-full"
-                              style={{ opacity: 1 - i * 0.1 }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ) : activeTab?.result?.columns?.length ? (
-                      <Table>
-                        <TableHeader>
-                          {resultTable.getHeaderGroups().map((headerGroup) => (
-                            <TableRow key={headerGroup.id}>
-                              {headerGroup.headers.map((header) => (
-                                <TableHead
-                                  key={header.id}
-                                  className="sticky top-0 z-10 whitespace-nowrap bg-muted/40 text-xs font-medium backdrop-blur-sm"
-                                >
-                                  {header.isPlaceholder
-                                    ? null
-                                    : flexRender(
-                                        header.column.columnDef.header,
-                                        header.getContext(),
-                                      )}
-                                </TableHead>
-                              ))}
-                            </TableRow>
-                          ))}
-                        </TableHeader>
-                        <TableBody>
-                          {resultTableRows.length === 0 ? (
-                            <TableRow>
-                              <TableCell
-                                colSpan={
-                                  resultTable.getAllLeafColumns().length || 1
-                                }
-                                className="h-28 text-center text-xs text-muted-foreground"
-                              >
-                                {activeResultFilter
-                                  ? `No rows match "${activeResultFilter}".`
-                                  : "No rows returned for this query."}
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            <>
-                              {useVirtualizedResultRows ? (
+                              {allSelectedMarkedForDelete ? (
                                 <>
-                                  {virtualPaddingTop > 0 ? (
-                                    <TableRow>
-                                      <TableCell
-                                        colSpan={
-                                          resultTable.getAllLeafColumns().length
-                                        }
-                                        style={{ height: virtualPaddingTop }}
-                                      />
-                                    </TableRow>
-                                  ) : null}
-                                  {virtualRows.map((virtualRow) => {
-                                    const row =
-                                      resultTableRows[virtualRow.index];
-                                    if (!row) return null;
-                                    return renderResultRow(
-                                      row,
-                                      virtualRow.size,
-                                    );
-                                  })}
-                                  {virtualPaddingBottom > 0 ? (
-                                    <TableRow>
-                                      <TableCell
-                                        colSpan={
-                                          resultTable.getAllLeafColumns().length
-                                        }
-                                        style={{ height: virtualPaddingBottom }}
-                                      />
-                                    </TableRow>
-                                  ) : null}
+                                  <Undo2 className="h-3 w-3" />
+                                  Unmark
                                 </>
                               ) : (
-                                resultTableRows.map((row) =>
-                                  renderResultRow(row),
-                                )
+                                <>
+                                  <Trash2 className="h-3 w-3" />
+                                  Delete
+                                  {selectedRowIdxs.size > 1
+                                    ? ` (${selectedRowIdxs.size})`
+                                    : ""}
+                                </>
                               )}
+                            </Button>
+                            <div className="h-4 w-px bg-border/40" />
+                          </div>
+                        )}
+
+                        {/* Center: pending changes summary */}
+                        {hasPendingChanges && (
+                          <div className="flex items-center gap-1.5">
+                            {pendingEdits.size > 0 && (
+                              <Badge
+                                variant="secondary"
+                                className="h-5 gap-1 bg-accent/12 px-1.5 text-[10px] text-accent"
+                              >
+                                <Pencil className="h-2.5 w-2.5" />
+                                {pendingEdits.size} edit
+                                {pendingEdits.size > 1 ? "s" : ""}
+                              </Badge>
+                            )}
+                            {pendingDeletes.size > 0 && (
+                              <Badge
+                                variant="secondary"
+                                className="h-5 gap-1 bg-destructive/10 px-1.5 text-[10px] text-destructive"
+                              >
+                                <Trash2 className="h-2.5 w-2.5" />
+                                {pendingDeletes.size} deletion
+                                {pendingDeletes.size > 1 ? "s" : ""}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Right: apply / discard / dismiss */}
+                        <div className="ml-auto flex items-center gap-1">
+                          {hasPendingChanges && (
+                            <>
+                              <Button
+                                size="sm"
+                                className="h-6 gap-1 bg-primary px-2.5 text-[11px] text-primary-foreground hover:bg-primary/90"
+                                onClick={() => void applyChanges()}
+                                disabled={applyingChanges}
+                              >
+                                {applyingChanges ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Check className="h-3 w-3" />
+                                )}
+                                Apply
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 gap-1 px-2 text-[11px] text-muted-foreground"
+                                onClick={discardChanges}
+                                disabled={applyingChanges}
+                              >
+                                <Undo2 className="h-3 w-3" />
+                                Discard
+                              </Button>
                             </>
                           )}
-                        </TableBody>
-                      </Table>
-                    ) : (
-                      <div className="flex h-full items-center justify-center">
-                        <div className="text-center">
-                          <Table2 className="mx-auto h-10 w-10 text-muted-foreground/15" />
-                          <p className="mt-2 text-xs text-muted-foreground/40">
-                            {activeTab?.result?.message ??
-                              "Run a query to see results"}
-                          </p>
+                          {!hasPendingChanges && hasSelection && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-1.5 text-muted-foreground"
+                              onClick={() => {
+                                setSelectedRowIdxs(new Set());
+                                lastClickedRowRef.current = null;
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     )}
-                  </div>
 
-                  {/* Selection hints */}
-                  {hasSelection && !hasPendingChanges && (
-                    <div className="border-t border-border/30 bg-muted/10 px-3 py-1">
-                      <span className="text-[10px] text-muted-foreground/60">
-                        Ctrl+Click to toggle · Shift+Click for range · Ctrl+A to select all · Delete to mark for deletion · Ctrl+S to apply · Esc to deselect
-                      </span>
+                    {/* Results table */}
+                    {activeTab?.result?.columns?.length ? (
+                      <div className="border-b border-border/50 bg-background/80 px-3 py-2 backdrop-blur">
+                        <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+                          <div className="relative min-w-0 flex-1">
+                            <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              value={resultFilter}
+                              onChange={(event) =>
+                                setResultFilter(event.currentTarget.value)
+                              }
+                              placeholder="Filter rows across the visible result set"
+                              className="h-8 border-border/70 bg-muted/30 pr-9 pl-8 text-xs"
+                              data-testid="results-filter-input"
+                              aria-label="Filter result rows"
+                            />
+                            {activeResultFilter ? (
+                              <button
+                                type="button"
+                                className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                                onClick={() => setResultFilter("")}
+                                aria-label="Clear result filter"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            ) : null}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                            <Badge
+                              variant="secondary"
+                              className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-1 font-medium text-foreground"
+                              data-testid="results-count-badge"
+                            >
+                              {visibleResultCount} / {totalResultCount} rows
+                            </Badge>
+                            <div className="flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-muted-foreground">
+                              <Sparkles className="h-3 w-3" />
+                              <span data-testid="results-sort-summary">
+                                {primaryResultSort
+                                  ? `${primaryResultSort.id} ${primaryResultSort.desc ? "desc" : "asc"}`
+                                  : "Natural order"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div
+                      ref={resultContainerRef}
+                      className="flex-1 overflow-auto"
+                    >
+                      {activeTab?.running ? (
+                        <div className="p-3">
+                          <div className="space-y-1">
+                            {Array.from({ length: 8 }).map((_, i) => (
+                              <Skeleton
+                                key={i}
+                                className="h-7 w-full"
+                                style={{ opacity: 1 - i * 0.1 }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ) : activeTab?.result?.columns?.length ? (
+                        <Table>
+                          <TableHeader>
+                            {resultTable
+                              .getHeaderGroups()
+                              .map((headerGroup) => (
+                                <TableRow key={headerGroup.id}>
+                                  {headerGroup.headers.map((header) => (
+                                    <TableHead
+                                      key={header.id}
+                                      className="sticky top-0 z-10 whitespace-nowrap bg-muted/40 text-xs font-medium backdrop-blur-sm"
+                                    >
+                                      {header.isPlaceholder
+                                        ? null
+                                        : flexRender(
+                                            header.column.columnDef.header,
+                                            header.getContext(),
+                                          )}
+                                    </TableHead>
+                                  ))}
+                                </TableRow>
+                              ))}
+                          </TableHeader>
+                          <TableBody>
+                            {resultTableRows.length === 0 ? (
+                              <TableRow>
+                                <TableCell
+                                  colSpan={
+                                    resultTable.getAllLeafColumns().length || 1
+                                  }
+                                  className="h-28 text-center text-xs text-muted-foreground"
+                                >
+                                  {activeResultFilter
+                                    ? `No rows match "${activeResultFilter}".`
+                                    : "No rows returned for this query."}
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              <>
+                                {useVirtualizedResultRows ? (
+                                  <>
+                                    {virtualPaddingTop > 0 ? (
+                                      <TableRow>
+                                        <TableCell
+                                          colSpan={
+                                            resultTable.getAllLeafColumns()
+                                              .length
+                                          }
+                                          style={{ height: virtualPaddingTop }}
+                                        />
+                                      </TableRow>
+                                    ) : null}
+                                    {virtualRows.map((virtualRow) => {
+                                      const row =
+                                        resultTableRows[virtualRow.index];
+                                      if (!row) return null;
+                                      return renderResultRow(
+                                        row,
+                                        virtualRow.size,
+                                      );
+                                    })}
+                                    {virtualPaddingBottom > 0 ? (
+                                      <TableRow>
+                                        <TableCell
+                                          colSpan={
+                                            resultTable.getAllLeafColumns()
+                                              .length
+                                          }
+                                          style={{
+                                            height: virtualPaddingBottom,
+                                          }}
+                                        />
+                                      </TableRow>
+                                    ) : null}
+                                  </>
+                                ) : (
+                                  resultTableRows.map((row) =>
+                                    renderResultRow(row),
+                                  )
+                                )}
+                              </>
+                            )}
+                          </TableBody>
+                        </Table>
+                      ) : (
+                        <div className="flex h-full items-center justify-center">
+                          <div className="text-center">
+                            <Table2 className="mx-auto h-10 w-10 text-muted-foreground/15" />
+                            <p className="mt-2 text-xs text-muted-foreground/40">
+                              {activeTab?.result?.message ??
+                                "Run a query to see results"}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+
+                    {/* Selection hints */}
+                    {hasSelection && !hasPendingChanges && (
+                      <div className="border-t border-border/30 bg-muted/10 px-3 py-1">
+                        <span className="text-[10px] text-muted-foreground/60">
+                          Ctrl+Click to toggle · Shift+Click for range · Ctrl+A
+                          to select all · Delete to mark for deletion · Ctrl+S
+                          to apply · Esc to deselect
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -3207,7 +3300,7 @@ function App() {
             )}
 
             {opsPreviewCount !== null ? (
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[11px] text-amber-200">
+              <div className="rounded-md border border-accent/30 bg-accent/10 px-2 py-1.5 text-[11px] text-accent">
                 Preview: {opsPreviewCount} row(s) will be affected.
               </div>
             ) : null}
@@ -3269,16 +3362,21 @@ function App() {
           >
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Edit3 className="h-4 w-4 text-amber-400" />
-                Bulk Edit — {selectedRowIdxs.size} row{selectedRowIdxs.size !== 1 ? "s" : ""}
+                <Edit3 className="h-4 w-4 text-accent" />
+                Bulk Edit — {selectedRowIdxs.size} row
+                {selectedRowIdxs.size !== 1 ? "s" : ""}
               </DialogTitle>
               <DialogDescription>
-                Set a column value for all selected rows. Changes are staged and must be applied.
+                Set a column value for all selected rows. Changes are staged and
+                must be applied.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <label htmlFor="bulk-edit-column" className="text-xs font-medium text-muted-foreground">
+                <label
+                  htmlFor="bulk-edit-column"
+                  className="text-xs font-medium text-muted-foreground"
+                >
                   Column
                 </label>
                 <select
@@ -3288,12 +3386,17 @@ function App() {
                   onChange={(e) => setBulkEditColumn(e.currentTarget.value)}
                 >
                   {(activeTab?.result?.columns ?? []).map((col) => (
-                    <option key={col} value={col}>{col}</option>
+                    <option key={col} value={col}>
+                      {col}
+                    </option>
                   ))}
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="bulk-edit-value" className="text-xs font-medium text-muted-foreground">
+                <label
+                  htmlFor="bulk-edit-value"
+                  className="text-xs font-medium text-muted-foreground"
+                >
                   New value
                 </label>
                 <Input
@@ -3305,15 +3408,23 @@ function App() {
                   onChange={(e) => setBulkEditValue(e.currentTarget.value)}
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  Tip: Type NULL for null. Values are auto-coerced to match the column type.
+                  Tip: Type NULL for null. Values are auto-coerced to match the
+                  column type.
                 </p>
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setBulkEditOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setBulkEditOpen(false)}
+              >
                 Cancel
               </Button>
-              <Button type="submit" className="gap-1.5 bg-amber-600 hover:bg-amber-500">
+              <Button
+                type="submit"
+                className="gap-1.5 bg-accent text-accent-foreground hover:bg-accent/90"
+              >
                 <Edit3 className="h-3.5 w-3.5" />
                 Stage Edit
               </Button>

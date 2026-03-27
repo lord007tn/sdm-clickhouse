@@ -571,8 +571,8 @@ export function ConnectionDialogPage({
                 className={cn(
                   "rounded-md border px-2 py-1.5 text-[11px]",
                   diagnostics.ok
-                    ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-200"
-                    : "border-amber-500/30 bg-amber-500/5 text-amber-200",
+                    ? "border-primary/30 bg-primary/10 text-primary"
+                    : "border-accent/30 bg-accent/10 text-accent",
                 )}
               >
                 <div className="font-medium">
