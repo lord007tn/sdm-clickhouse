@@ -430,14 +430,14 @@ fn resolve_updater_repo() -> String {
 }
 
 fn github_token() -> Option<String> {
-    // Only use tokens explicitly intended for the updater, or personal tokens.
-    // Ignore CI-scoped tokens (ghs_ prefix) that lack API read permissions.
-    std::env::var("GITHUB_TOKEN")
-        .or_else(|_| std::env::var("GH_TOKEN"))
+    // Only use a token explicitly set for the updater. The default repo is
+    // public so no auth is needed. GITHUB_TOKEN / GH_TOKEN are intentionally
+    // ignored because CI-scoped or CLI-scoped tokens leak into the desktop
+    // environment and cause 403 errors against the public releases API.
+    std::env::var("SDM_CLICKHOUSE_UPDATER_TOKEN")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .filter(|value| !value.starts_with("ghs_"))
 }
 
 fn env_flag_enabled(name: &str) -> bool {
@@ -481,7 +481,7 @@ async fn fetch_releases(repo: &str) -> Result<Vec<GithubRelease>, String> {
         } else if status.as_u16() == 403 {
             "GitHub API rate limit reached. Update checks will resume automatically. No action needed.".to_string()
         } else if status.as_u16() == 401 {
-            "Authentication failed for GitHub API. Check GITHUB_TOKEN or GH_TOKEN permissions."
+            "Authentication failed for GitHub API. Check SDM_CLICKHOUSE_UPDATER_TOKEN if set."
                 .to_string()
         } else {
             "Could not read release metadata from GitHub.".to_string()
