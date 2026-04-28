@@ -298,11 +298,14 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          release_id="$(curl -fsSL \
-            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${REPO}/releases/tags/${TAG}" \
-            | jq -r '.id')"
+          release_id="$(
+            curl -fsSL \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${REPO}/releases?per_page=100" \
+              | jq -r --arg tag "${TAG}" '.[] | select(.tag_name == $tag or .name == $tag) | .id' \
+              | head -n 1
+          )"
 
           if [ -z "${release_id}" ] || [ "${release_id}" = "null" ]; then
             echo "No release found for tag ${TAG}"
