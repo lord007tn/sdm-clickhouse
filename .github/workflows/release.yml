@@ -232,10 +232,64 @@ jobs:
         with:
           node-version: 22
 
-      - name: Generate release notes
-        run: npx changelogithub@latest || echo "changelogithub failed, continuing"
+      - name: Resolve changelog range
+        id: changelog_range
         env:
+          CURRENT_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          previous_tag="$(node <<'NODE'
+          const { execFileSync } = require("node:child_process");
+
+          const current = process.env.CURRENT_TAG;
+          const parse = (tag) => {
+            const match = /^v(\d+)\.(\d+)\.(\d+)$/.exec(tag);
+            return match ? match.slice(1).map(Number) : null;
+          };
+          const compare = (a, b) => {
+            for (let i = 0; i < 3; i += 1) {
+              if (a[i] !== b[i]) return a[i] - b[i];
+            }
+            return 0;
+          };
+
+          const currentVersion = parse(current);
+          if (!currentVersion) {
+            throw new Error(`Release tag ${current} is not a stable semver tag like v1.2.3.`);
+          }
+
+          const tags = execFileSync("git", ["tag", "--list", "v[0-9]*"], { encoding: "utf8" })
+            .split(/\r?\n/)
+            .filter(Boolean)
+            .map((tag) => ({ tag, version: parse(tag) }))
+            .filter(({ tag, version }) => tag !== current && version && compare(version, currentVersion) < 0)
+            .sort((a, b) => compare(b.version, a.version));
+
+          process.stdout.write(tags[0]?.tag ?? "");
+          NODE
+          )"
+
+          if [ -n "${previous_tag}" ]; then
+            echo "Using changelog range ${previous_tag}...${CURRENT_TAG}"
+          else
+            echo "No previous stable semver tag found; changelogithub will generate from repository history."
+          fi
+
+          echo "from=${previous_tag}" >> "${GITHUB_OUTPUT}"
+          echo "to=${CURRENT_TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate release notes
+        env:
+          FROM_TAG: ${{ steps.changelog_range.outputs.from }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TO_TAG: ${{ steps.changelog_range.outputs.to }}
+        run: |
+          set -euo pipefail
+          args=(--github "${GITHUB_REPOSITORY}" --to "${TO_TAG}" --name "${TO_TAG}" --draft)
+          if [ -n "${FROM_TAG}" ]; then
+            args+=(--from "${FROM_TAG}")
+          fi
+          npx changelogithub@latest "${args[@]}"
 
       - name: Publish release (remove draft flag)
         env:
