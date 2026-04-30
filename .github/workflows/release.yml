@@ -285,62 +285,11 @@ jobs:
           TO_TAG: ${{ steps.changelog_range.outputs.to }}
         run: |
           set -euo pipefail
-          node <<'NODE' > release-notes.md
-          const { execFileSync } = require("node:child_process");
-          const fs = require("node:fs");
-
-          const fromTag = process.env.FROM_TAG || "";
-          const toTag = process.env.TO_TAG;
-          const version = toTag.replace(/^v/, "");
-          const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
-          const lines = changelog.split(/\r?\n/);
-          const sectionStart = lines.findIndex((line) =>
-            line.startsWith(`## [${version}]`),
-          );
-          const sectionEnd =
-            sectionStart === -1
-              ? -1
-              : lines.findIndex(
-                  (line, index) => index > sectionStart && line.startsWith("## ["),
-                );
-          const section =
-            sectionStart === -1
-              ? ""
-              : lines
-                  .slice(
-                    sectionStart + 1,
-                    sectionEnd === -1 ? lines.length : sectionEnd,
-                  )
-                  .join("\n")
-                  .trim();
-          const range = fromTag ? `${fromTag}..${toTag}` : toTag;
-          const commitLog = execFileSync(
-            "git",
-            ["log", "--pretty=format:%h %s", range],
-            { encoding: "utf8" },
-          ).trim();
-
-          const body = [];
-          body.push(section || `No CHANGELOG.md entry found for ${toTag}.`);
-          if (commitLog) {
-            body.push("");
-            body.push("## Commits");
-            body.push("");
-            for (const line of commitLog.split(/\r?\n/)) {
-              body.push(`- ${line}`);
-            }
-          }
-          if (fromTag) {
-            body.push("");
-            body.push(
-              `[View changes on GitHub](https://github.com/${process.env.GITHUB_REPOSITORY}/compare/${fromTag}...${toTag})`,
-            );
-          }
-
-          process.stdout.write(`${body.join("\n")}\n`);
-          NODE
-
-          gh release edit "${TO_TAG}" --draft --title "${TO_TAG}" --notes-file release-notes.md
+          args=(--github "${GITHUB_REPOSITORY}" --to "${TO_TAG}" --name "${TO_TAG}" --draft)
+          if [ -n "${FROM_TAG}" ]; then
+            args+=(--from "${FROM_TAG}")
+          fi
+          npx changelogithub@latest "${args[@]}"
 
       - name: Publish release (remove draft flag)
         env:
