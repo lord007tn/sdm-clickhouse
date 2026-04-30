@@ -1,5 +1,9 @@
 # SDM ClickHouse
 
+<p>
+  <img src="./public/sdm-clickhouse-logo.svg" alt="SDM ClickHouse" width="420" />
+</p>
+
 [![CI](https://github.com/lord007tn/sdm-clickhouse/actions/workflows/ci.yml/badge.svg)](https://github.com/lord007tn/sdm-clickhouse/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/lord007tn/sdm-clickhouse?display_name=tag)](https://github.com/lord007tn/sdm-clickhouse/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
