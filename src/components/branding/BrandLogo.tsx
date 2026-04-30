@@ -98,7 +98,9 @@ export function BrandLogo({
 }: BrandLogoProps) {
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <BrandMark className={cn(compact ? "size-7" : "size-10", markClassName)} />
+      <BrandMark
+        className={cn(compact ? "size-7" : "size-10", markClassName)}
+      />
       <div className="min-w-0">
         {compact ? (
           <div className="flex items-baseline gap-1">

@@ -1,7 +1,28 @@
 {
   "name": "sdm-clickhouse",
+  "description": "Open-source desktop SQL workbench for ClickHouse built with Tauri, React, TypeScript, and Rust.",
   "private": true,
   "version": "0.1.1",
+  "license": "MIT",
+  "author": "SDM ClickHouse contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lord007tn/sdm-clickhouse.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lord007tn/sdm-clickhouse/issues"
+  },
+  "homepage": "https://github.com/lord007tn/sdm-clickhouse#readme",
+  "keywords": [
+    "clickhouse",
+    "desktop",
+    "sql",
+    "tauri",
+    "react",
+    "typescript",
+    "rust",
+    "database-client"
+  ],
   "packageManager": "pnpm@10.30.3",
   "type": "module",
   "scripts": {

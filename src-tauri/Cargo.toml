@@ -1,10 +1,13 @@
 [package]
-name = "tauri-app"
+name = "sdm-clickhouse"
 version = "0.1.1"
-description = "A Tauri App"
-authors = ["you"]
+description = "Open-source desktop SQL workbench for ClickHouse."
+authors = ["SDM ClickHouse contributors"]
 edition = "2021"
 repository = "https://github.com/lord007tn/sdm-clickhouse"
+license = "MIT"
+keywords = ["clickhouse", "desktop", "sql", "tauri"]
+categories = ["database", "gui"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

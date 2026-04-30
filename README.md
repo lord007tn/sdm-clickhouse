@@ -1,60 +1,78 @@
 # SDM ClickHouse
 
-`SDM ClickHouse` is a Tauri desktop client for ClickHouse with a connection-first workflow inspired by Tiny RDM.
+[![CI](https://github.com/lord007tn/sdm-clickhouse/actions/workflows/ci.yml/badge.svg)](https://github.com/lord007tn/sdm-clickhouse/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/lord007tn/sdm-clickhouse?display_name=tag)](https://github.com/lord007tn/sdm-clickhouse/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-## What ships in `v0.1.2`
+Open-source desktop SQL workbench for ClickHouse, built with Tauri, React, TypeScript, and Rust.
 
-- Saved ClickHouse connections with local profile storage and password handling outside SQLite.
-- Database and table explorer with column inspection and DDL viewing.
+SDM ClickHouse is designed around a connection-first workflow: save ClickHouse profiles, browse schemas, run and explain SQL, inspect results, keep reusable snippets, and guard destructive data operations from one native desktop app.
+
+## Why Use It
+
+- Native desktop app for Windows, macOS, and Linux.
+- Saved ClickHouse connections with local metadata and passwords kept outside SQLite.
+- Database, table, column, and DDL explorer.
 - Multi-tab SQL workspace with execution, cancellation, paging, formatting, and explain flows.
-- Query history, reusable snippets, audit logs, and application logs.
-- Guarded data operations for insert, update, delete, create, and drop actions.
-- Connection diagnostics, profile import/export, metadata backup/restore, and in-app update checks.
+- Query history, SQL snippets, audit logs, and app logs.
+- Guarded insert, update, delete, create, and drop workflows.
+- Connection diagnostics, metadata import/export, backup/restore, and release update checks.
 - Connection overview insights for database, table, storage, and activity summaries.
 
-## Stack
+## Install
 
-- Tauri v2
-- React 19 + TypeScript + Vite
-- shadcn/ui + Tailwind CSS
-- SQLite for local metadata
-- ClickHouse HTTP(S) for database communication
+Download the latest desktop bundles from [GitHub Releases](https://github.com/lord007tn/sdm-clickhouse/releases).
 
-## Prerequisites
+Linux/macOS:
 
-- Node.js 20+
-- pnpm 10+
-- Rust toolchain (`rustup`, `cargo`, `rustc`)
-- Platform build tooling for Tauri bundles
+```bash
+curl -fsSL https://raw.githubusercontent.com/lord007tn/sdm-clickhouse/main/install.sh | bash
+```
 
-## Setup
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/lord007tn/sdm-clickhouse/main/install.ps1 | iex
+```
+
+## Quick Start for Contributors
+
+### Prerequisites
+
+- Node.js 20 or newer
+- pnpm 10 or newer
+- Rust toolchain from [rustup](https://rustup.rs/)
+- Platform build tooling required by [Tauri v2](https://tauri.app/start/prerequisites/)
+
+### Set Up
 
 ```powershell
 pnpm install
 ```
 
-If Rust is missing from the current PowerShell session:
+If Rust was installed in the current PowerShell session and `cargo` is not available yet:
 
 ```powershell
-$env:Path += ";$env:USERPROFILE\\.cargo\\bin"
+$env:Path += ";$env:USERPROFILE\.cargo\bin"
 ```
 
-## Run
+### Run the Desktop App
 
 ```powershell
 pnpm tauri dev
 ```
 
-Browser-only Vite preview is useful for layout work, but the product depends on the Tauri runtime for commands and native dialogs.
-
-## Build
+Browser-only Vite mode is useful for layout work:
 
 ```powershell
-pnpm build
-pnpm tauri build
+pnpm dev
 ```
 
-## Quality Checks
+The full product depends on Tauri commands, native dialogs, local SQLite metadata, and OS keychain integration, so use `pnpm tauri dev` for end-to-end work.
+
+## Development Checks
+
+Run the focused checks while iterating:
 
 ```powershell
 pnpm typecheck
@@ -64,25 +82,59 @@ pnpm knip
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
-## Installers and Updates
-
-One-line installers are included for GitHub Releases:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/lord007tn/sdm-clickhouse/main/install.sh | bash
-```
+Run the project validation suite before opening a PR:
 
 ```powershell
-irm https://raw.githubusercontent.com/lord007tn/sdm-clickhouse/main/install.ps1 | iex
+pnpm validate
 ```
 
-The release pipeline publishes cross-platform desktop bundles, a Windows portable ZIP, and `latest.json` for updater clients.
+End-to-end tests are available with:
 
-## Documentation
+```powershell
+pnpm test:e2e
+```
 
-- [Changelog](./CHANGELOG.md)
-- [Architecture](./docs/architecture.md)
-- [Tauri Commands](./docs/commands.md)
-- [Contributing](./CONTRIBUTING.md)
-- [Security Policy](./SECURITY.md)
-- [Code of Conduct](./CODE_OF_CONDUCT.md)
+## Project Layout
+
+```text
+src/                  React desktop UI
+src/features/query/   SQL editor, completion, and tab model
+src/lib/api.ts        Typed frontend wrapper around Tauri commands
+src-tauri/src/        Rust command layer, ClickHouse transport, local SQLite store
+src-tauri/tauri.conf.json
+docs/                 Architecture and command reference
+tests/                Playwright smoke and interaction tests
+scripts/              Release and consistency checks
+```
+
+## Architecture
+
+The app has five main layers:
+
+1. Tauri v2 native shell and Rust command handlers.
+2. React 19 + TypeScript frontend.
+3. ClickHouse HTTP(S) transport.
+4. SQLite local metadata for connections, history, snippets, logs, and audit data.
+5. OS keychain storage for secrets, with a local fallback when platform keyring services are unavailable.
+
+See [docs/architecture.md](./docs/architecture.md) and [docs/commands.md](./docs/commands.md) for deeper implementation notes.
+
+## Contributing
+
+Issues and pull requests are welcome. Good first contributions include documentation fixes, reproducible bug reports, focused UI polish, test coverage for existing flows, and small improvements to query/workbench ergonomics.
+
+Before opening a PR, read [CONTRIBUTING.md](./CONTRIBUTING.md), run `pnpm validate` where practical, and include screenshots or short screen recordings for UI changes.
+
+## Security
+
+Please do not report vulnerabilities in public issues. Use GitHub Security Advisories for private reporting and include reproduction details, affected versions, and suggested mitigations when possible.
+
+See [SECURITY.md](./SECURITY.md) for the full policy.
+
+## Release Notes
+
+See [CHANGELOG.md](./CHANGELOG.md). The current tracked release line is `v0.1.1`.
+
+## License
+
+SDM ClickHouse is released under the [MIT License](./LICENSE).

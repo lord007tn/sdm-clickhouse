@@ -50,7 +50,7 @@ const tauriConfigVersion = readJson("src-tauri/tauri.conf.json").version;
 const cargoVersion = readCargoPackageVersion("src-tauri/Cargo.toml");
 const cargoLockVersion = readCargoLockPackageVersion(
   "src-tauri/Cargo.lock",
-  "tauri-app",
+  "sdm-clickhouse",
 );
 
 const uniqueVersions = new Set([

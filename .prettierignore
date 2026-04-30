@@ -1,5 +1,7 @@
 dist
 node_modules
+.claude/worktrees
+dogfood-output
 src-tauri/target
 src-tauri/target-validation
 src-tauri/tauri.validation.conf.json

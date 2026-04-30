@@ -329,14 +329,10 @@ const QUALIFIED_PATTERN = /[\w`.]+/;
 type SqlContext = "from" | "select" | "where" | "dot-database" | "general";
 
 /** Detect the SQL context near the cursor to offer better suggestions. */
-function detectContext(
-  text: string,
-): { ctx: SqlContext; dotPrefix?: string } {
+function detectContext(text: string): { ctx: SqlContext; dotPrefix?: string } {
   // Check if the cursor is right after a dot (e.g. `default.`)
   // This means we should show table completions for that database
-  const dotMatch = text.match(
-    /(?:`([^`]+)`|(\w+))\.(?:`([^`]*)`?|(\w*))$/,
-  );
+  const dotMatch = text.match(/(?:`([^`]+)`|(\w+))\.(?:`([^`]*)`?|(\w*))$/);
   if (dotMatch) {
     const dbName = dotMatch[1] ?? dotMatch[2] ?? "";
     return { ctx: "dot-database", dotPrefix: dbName };

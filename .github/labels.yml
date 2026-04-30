@@ -1,3 +1,15 @@
+- name: bug
+  color: "D73A4A"
+  description: Reproducible defect or regression
+
+- name: enhancement
+  color: "A2EEEF"
+  description: New feature or improvement request
+
+- name: question
+  color: "D876E3"
+  description: Usage or development question
+
 - name: frontend
   color: "1D76DB"
   description: Frontend React/UI changes

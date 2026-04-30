@@ -278,9 +278,7 @@ test("renders query workspace with mocked tauri bridge and codemirror editor", a
   await page.goto("/");
 
   const sqlEditor = page.getByTestId("sql-editor");
-  await expect(
-    page.getByTestId("toggle-insights-button"),
-  ).toBeVisible();
+  await expect(page.getByTestId("toggle-insights-button")).toBeVisible();
   await expect(sqlEditor).toBeVisible();
   await expect(
     sqlEditor.locator('[contenteditable="true"][role="textbox"]'),
