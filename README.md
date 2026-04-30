@@ -137,7 +137,7 @@ See [SECURITY.md](./SECURITY.md) for the full policy.
 
 ## Release Notes
 
-See [CHANGELOG.md](./CHANGELOG.md). The current tracked release line is `v0.1.1`.
+See [CHANGELOG.md](./CHANGELOG.md). The current tracked release line is `v0.1.2`.
 
 ## License
 

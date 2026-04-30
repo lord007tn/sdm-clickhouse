@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.2] - 2026-04-30
+
+### Changed
+
+- Reworked the README and contributor documentation so new users can understand, install, run, validate, and contribute to the project more quickly.
+- Refreshed repository metadata, support paths, issue templates, and labels for a cleaner open-source discovery experience.
+- Replaced the previous detailed brand mark with a simpler minimal logo across the app, README, SVG assets, and generated desktop icons.
+
 ## [0.1.1] - 2026-04-28
 
 ### Added
@@ -52,3 +60,4 @@ All notable changes to this project are documented in this file.
 [0.0.0]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.0.0
 [0.1.0]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.0
 [0.1.1]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.1
+[0.1.2]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.2

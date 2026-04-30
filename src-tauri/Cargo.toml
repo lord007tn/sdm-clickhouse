@@ -1,6 +1,6 @@
 [package]
 name = "sdm-clickhouse"
-version = "0.1.1"
+version = "0.1.2"
 description = "Open-source desktop SQL workbench for ClickHouse."
 authors = ["SDM ClickHouse contributors"]
 edition = "2021"
