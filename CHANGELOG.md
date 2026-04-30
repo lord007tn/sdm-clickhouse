@@ -45,7 +45,7 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
-- Initial public release of the SDM ClickHouse desktop client on Tauri v2, React, and TypeScript.
+- Initial public release of the Simple Desktop Manager (SDM) ClickHouse desktop client on Tauri v2, React, and TypeScript.
 - Saved ClickHouse connections with secure secret handling, diagnostics, and import/export support.
 - Schema explorer for databases, tables, columns, and table DDL inspection.
 - Multi-tab SQL workspace with execution, cancellation, formatting, explain support, paging, and timeout controls.

@@ -2,7 +2,7 @@
 
 ## Product Goal
 
-`SDM ClickHouse` is a desktop ClickHouse client inspired by Tiny RDM's connection-first workflow:
+`SDM ClickHouse` stands for Simple Desktop Manager for ClickHouse. It is a desktop ClickHouse client inspired by Tiny RDM's connection-first workflow:
 
 - Inspiration: https://redis.tinycraft.cc/
 - Tooling reference: https://knip.dev/

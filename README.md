@@ -8,7 +8,7 @@
 [![Release](https://img.shields.io/github/v/release/lord007tn/sdm-clickhouse?display_name=tag)](https://github.com/lord007tn/sdm-clickhouse/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-Open-source desktop SQL workbench for ClickHouse, built with Tauri, React, TypeScript, and Rust.
+Simple Desktop Manager (SDM) for ClickHouse: an open-source desktop SQL workbench built with Tauri, React, TypeScript, and Rust.
 
 SDM ClickHouse is designed around a connection-first workflow: save ClickHouse profiles, browse schemas, run and explain SQL, inspect results, keep reusable snippets, and guard destructive data operations from one native desktop app.
 
