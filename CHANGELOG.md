@@ -2,13 +2,6 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.1.3] - 2026-05-03
-
-### Changed
-
-- Replaced the app branding with a unified generated raster logo set across the README, favicon, in-app brand mark, Tauri package icons, Windows icon, and macOS icon.
-- Removed stale SVG/default placeholder brand assets so the project has one canonical SDM ClickHouse image set.
-
 ## [0.1.2] - 2026-04-30
 
 ### Changed
@@ -68,4 +61,3 @@ All notable changes to this project are documented in this file.
 [0.1.0]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.0
 [0.1.1]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.1
 [0.1.2]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.2
-[0.1.3]: https://github.com/lord007tn/sdm-clickhouse/releases/tag/v0.1.3
