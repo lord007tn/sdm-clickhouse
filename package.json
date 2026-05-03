@@ -2,7 +2,7 @@
   "name": "sdm-clickhouse",
   "description": "Simple Desktop Manager for ClickHouse: an open-source desktop SQL workbench built with Tauri, React, TypeScript, and Rust.",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "MIT",
   "author": "SDM ClickHouse contributors",
   "repository": {

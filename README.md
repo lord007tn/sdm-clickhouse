@@ -1,7 +1,7 @@
 # SDM ClickHouse
 
 <p>
-  <img src="./public/sdm-clickhouse-logo.svg" alt="SDM ClickHouse" width="420" />
+  <img src="./public/sdm-clickhouse-readme.png" alt="SDM ClickHouse" width="520" />
 </p>
 
 [![CI](https://github.com/lord007tn/sdm-clickhouse/actions/workflows/ci.yml/badge.svg)](https://github.com/lord007tn/sdm-clickhouse/actions/workflows/ci.yml)
