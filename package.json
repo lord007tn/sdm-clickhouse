@@ -74,17 +74,17 @@
     "vaul": "^1.1.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.5",
-    "@playwright/test": "^1.58.2",
-    "@tailwindcss/vite": "^4.2.1",
+    "@biomejs/biome": "^2.4.15",
+    "@playwright/test": "^1.60.0",
+    "@tailwindcss/vite": "^4.3.0",
     "@tauri-apps/cli": "^2",
-    "@types/node": "^25.3.3",
+    "@types/node": "^25.9.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
     "knip": "^5.85.0",
-    "prettier": "^3.8.1",
-    "tailwindcss": "^4.2.1",
+    "prettier": "^3.8.3",
+    "tailwindcss": "^4.3.0",
     "typescript": "~5.9.3",
     "vite": "^7.3.1"
   }
